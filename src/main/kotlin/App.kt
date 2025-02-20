@@ -189,6 +189,13 @@ class GeminiBot(
 
                     addMessageToHistory(message.chatId, senderName, incomingText)
 
+                    // Action - Typing
+                    val sendTypingActionRequest = SendChatAction().apply {
+                        chatId = message.chatId
+                        action = ChatActionTyping()
+                    }
+                    client?.send(sendTypingActionRequest)
+
                     val prompt = buildGeminiPrompt(incomingText, message.chatId, senderName)
                     println("Prompt для Gemini:\n$prompt")
 
