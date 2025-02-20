@@ -21,7 +21,6 @@ dependencies {
     // Import BOM - version '3.4.0+td.1.8.26' (make sure this is correct!)
     implementation(platform("it.tdlight:tdlight-java-bom:3.4.0+td.1.8.26"))
 
-
     implementation("it.tdlight:tdlight-java") // Java 8 is supported if you use the following dependency classifier: `jdk8`
     implementation("it.tdlight:tdlight-natives") {
         artifact {
