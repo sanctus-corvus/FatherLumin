@@ -167,6 +167,14 @@ class GeminiBot(
                 if (message.senderId is MessageSenderUser && (message.senderId as MessageSenderUser).userId == botUserId) return@launch
                 if (message.content !is MessageText) return@launch // Фильтруем только текст
 
+                // Отмечаем сообщение как прочитанное
+                val viewMessagesRequest = ViewMessages().apply {
+                    chatId = message.chatId
+                    messageIds = longArrayOf(message.id)
+                    forceRead = true
+                }
+                client?.send(viewMessagesRequest)
+
                 val incomingText = (message.content as MessageText).text.text
                 var shouldReply = false // Условие для ответа
                 if (incomingText.contains(config.botName, ignoreCase = true) || message.replyTo != null) {
@@ -212,6 +220,17 @@ class GeminiBot(
                     } else {
                         "Ошибка Gemini API: ${geminiResponse.statusCode}"
                     }
+
+                    // Markdown parse - Опционально, т.к. видимо тут старая версия, ну или надо разбираться
+/*                    val formattedTextForSend: FormattedText = try {
+                        val parseMarkdownRequest = ParseMarkdown().apply {
+                            text = FormattedText(botResponseText, emptyArray())
+                        }
+                        client?.send(parseMarkdownRequest)?.get(5, TimeUnit.SECONDS) ?: FormattedText(botResponseText, emptyArray()) // для синхронного получения результата
+                    } catch (e: Exception) {
+                        println("Ошибка парсинга Markdown: ${e.message}. Отправляем просто")
+                        FormattedText(botResponseText, emptyArray()) // В случае ошибки отправляем без Markdown
+                    }*/
 
                     // Отправка ответа
                     val formattedText = FormattedText(botResponseText, emptyArray())
