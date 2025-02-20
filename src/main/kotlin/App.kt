@@ -1,15 +1,8 @@
-import BotConfig
 import com.github.demidko.telegram.TelegramStorage
 import com.github.sanctuscorvus.GeminiClient
-import it.tdlight.client.APIToken
-import it.tdlight.client.AuthenticationSupplier
-import it.tdlight.client.SimpleTelegramClient
-import it.tdlight.client.SimpleTelegramClientFactory
-import it.tdlight.client.TDLibSettings
-import it.tdlight.jni.TdApi
+import it.tdlight.client.*
 import it.tdlight.jni.TdApi.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -139,10 +132,10 @@ class GeminiBot(
 """.trimIndent()
 
         // Ограничения на всякий случай
-/*        val maxLength = 3500
-        if (conversationHistoryText.length > maxLength) {
-            conversationHistoryText = conversationHistoryText.takeLast(maxLength)
-        }*/
+        /*        val maxLength = 3500
+                if (conversationHistoryText.length > maxLength) {
+                    conversationHistoryText = conversationHistoryText.takeLast(maxLength)
+                }*/
         return conversationHistoryText
     }
 
@@ -216,21 +209,22 @@ class GeminiBot(
                     }
 
                     val botResponseText = if (geminiResponse.statusCode in 200..299) {
-                        geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() ?: "Занят..."
+                        geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
+                            ?: "Занят..."
                     } else {
                         "Ошибка Gemini API: ${geminiResponse.statusCode}"
                     }
 
                     // Markdown parse - Опционально, т.к. видимо тут старая версия, ну или надо разбираться
-/*                    val formattedTextForSend: FormattedText = try {
-                        val parseMarkdownRequest = ParseMarkdown().apply {
-                            text = FormattedText(botResponseText, emptyArray())
-                        }
-                        client?.send(parseMarkdownRequest)?.get(5, TimeUnit.SECONDS) ?: FormattedText(botResponseText, emptyArray()) // для синхронного получения результата
-                    } catch (e: Exception) {
-                        println("Ошибка парсинга Markdown: ${e.message}. Отправляем просто")
-                        FormattedText(botResponseText, emptyArray()) // В случае ошибки отправляем без Markdown
-                    }*/
+                    /*                    val formattedTextForSend: FormattedText = try {
+                                            val parseMarkdownRequest = ParseMarkdown().apply {
+                                                text = FormattedText(botResponseText, emptyArray())
+                                            }
+                                            client?.send(parseMarkdownRequest)?.get(5, TimeUnit.SECONDS) ?: FormattedText(botResponseText, emptyArray()) // для синхронного получения результата
+                                        } catch (e: Exception) {
+                                            println("Ошибка парсинга Markdown: ${e.message}. Отправляем просто")
+                                            FormattedText(botResponseText, emptyArray()) // В случае ошибки отправляем без Markdown
+                                        }*/
 
                     // Отправка ответа
                     val formattedText = FormattedText(botResponseText, emptyArray())

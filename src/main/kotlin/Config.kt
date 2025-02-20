@@ -1,4 +1,3 @@
-//package com.github.sanctuscorvus
 import io.github.cdimascio.dotenv.dotenv
 import it.tdlight.client.APIToken
 import it.tdlight.client.SimpleTelegramClientFactory
@@ -20,10 +19,10 @@ object BotConfig {
     val groupId: String? = dotenv["GROUP_ID"]
     val apiId = apiIdStr.toInt()
     val allowedChatIds = setOf(
-            groupId?.toLong()
+        groupId?.toLong()
     )
 
-  //  val groupId: String? = dotenv["GROUP_ID"]
+    //  val groupId: String? = dotenv["GROUP_ID"]
 
     const val botCreator = "Sanctus Corvus"
     var botNamePrefix = botName.lowercase()
