@@ -38,6 +38,7 @@ dependencies {
     implementation("com.github.sanctus-corvus:LuminaKt:0.1.1-2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
     implementation("org.slf4j:slf4j-simple:2.0.16")
+    implementation("com.google.guava:guava:33.4.0-jre")
     testImplementation(kotlin("test"))
 }
 
