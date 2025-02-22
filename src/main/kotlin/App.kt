@@ -202,83 +202,47 @@ class GeminiBot(
 
                 val incomingText = (message.content as MessageText).text.text
                 var shouldReply = false // Условие для ответа
+
                 if (incomingText.contains(config.botName, ignoreCase = true)) {
                     shouldReply = true
-                }
-                if (!shouldReply) return@launch
+                } else if (message.replyTo is MessageReplyToMessage) {
+                    val replyToMessage = message.replyTo as MessageReplyToMessage
 
-                val senderUserId = (message.senderId as MessageSenderUser).userId
-                val getUserReq = GetUser().apply { userId = senderUserId }
-
-                client?.send(getUserReq)?.whenCompleteAsync { userResult, userError ->
-                    val senderName = if (userError != null || userResult !is User) {
-                        println("Ошибка GetUser: ${userError?.message ?: "Unknown"}. Используем userId как имя.")
-                        senderUserId.toString()
-                    } else {
-                        val user = userResult as User
-                        "${user.firstName} ${user.lastName}".trim()
-                    }
-                    println("Получено сообщение от $senderName: '$incomingText'")
-
-                    addMessageToHistory(message.chatId, senderName, incomingText)
-
-                    // Action - Typing
-                    val sendTypingActionRequest = SendChatAction().apply {
+                    // Асинхронно получаем сообщение, на которое ответили, и проверяем отправителя
+                    client?.send(GetMessage().apply {
                         chatId = message.chatId
-                        action = ChatActionTyping()
-                    }
-                    client?.send(sendTypingActionRequest)
-
-                    val prompt = buildGeminiPrompt(incomingText, message.chatId, senderName)
-                    println("Prompt для Gemini:\n$prompt")
-
-                    rateLimiter.acquire()
-
-                    // Вызов Gemini API
-                    val geminiResponse = try {
-                        geminiClient.generateContent(prompt)
-                    } catch (e: Exception) {
-                        println("Ошибка Gemini: ${e.message}")
-                        return@whenCompleteAsync
-                    }
-
-                    val botResponseText = if (geminiResponse.statusCode in 200..299) {
-                        geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-                            ?: "Подождите немного"
-                    } else {
-                        "Подождите немного"
-                        //"Ошибка Gemini API: ${geminiResponse.statusCode}"
-                    }
-
-                    // Markdown parse - Опционально, т.к. видимо тут старая версия, ну или надо разбираться
-                    /*                    val formattedTextForSend: FormattedText = try {
-                                            val parseMarkdownRequest = ParseMarkdown().apply {
-                                                text = FormattedText(botResponseText, emptyArray())
-                                            }
-                                            client?.send(parseMarkdownRequest)?.get(5, TimeUnit.SECONDS) ?: FormattedText(botResponseText, emptyArray()) // для синхронного получения результата
-                                        } catch (e: Exception) {
-                                            println("Ошибка парсинга Markdown: ${e.message}. Отправляем просто")
-                                            FormattedText(botResponseText, emptyArray()) // В случае ошибки отправляем без Markdown
-                                        }*/
-
-                    // Отправка ответа
-                    val formattedText = FormattedText(botResponseText, emptyArray())
-                    val inputMsg = InputMessageText().apply { text = formattedText }
-                    val sendReq = SendMessage().apply {
-                        chatId = message.chatId
-                        inputMessageContent = inputMsg
-                        replyTo = InputMessageReplyToMessage().apply { messageId = message.id }
-                        if (message.messageThreadId != 0L) messageThreadId = message.messageThreadId
-                    }
-                    client?.sendMessage(sendReq, true)?.whenCompleteAsync { sendResult, sendError ->
-                        if (sendError != null) {
-                            println("Ошибка отправки: ${sendError.message}")
+                        messageId = replyToMessage.messageId })?.whenCompleteAsync { repliedMessageResult, repliedMessageError ->
+                        if (repliedMessageError != null || repliedMessageResult !is Message) {
+                            println("Ошибка GetRepliedMessage: ${repliedMessageError?.message ?: "Unknown"}")
+                            return@whenCompleteAsync
                         } else {
-                            println("Ответ отправлен")
-                            addMessageToHistory(message.chatId, config.botName, botResponseText) // Сохраняем ответ
+                            val repliedMessage = repliedMessageResult as Message
+                            if (repliedMessage.senderId is MessageSenderUser && (repliedMessage.senderId as MessageSenderUser).userId == botUserId) {
+                                shouldReply = true
+                            }
+                        }
+
+                        if (shouldReply) {
+                            val senderUserId = (message.senderId as MessageSenderUser).userId
+                            val getUserReq = GetUser().apply { userId = senderUserId }
+
+                            client?.send(getUserReq)?.whenCompleteAsync { userResult, userError ->
+                                val senderName = if (userError != null || userResult !is User) {
+                                    println("Ошибка GetUser: ${userError?.message ?: "Unknown"}. Используем userId как имя.")
+                                    senderUserId.toString()
+                                } else {
+                                    val user = userResult as User
+                                    "${user.firstName} ${user.lastName}".trim()
+                                }
+                                println("Получено сообщение от $senderName: '$incomingText'")
+
+                                processMessage(client, message, incomingText, senderName)
+                            }
                         }
                     }
+                    return@launch
                 }
+                if (!shouldReply) return@launch
             }
         }
 
@@ -289,6 +253,60 @@ class GeminiBot(
             println("Залогинен как: ${me.firstName} ${me.lastName} (id: ${me.id})")
         } catch (e: Exception) {
             println("Ошибка получения информации о себе: ${e.message}")
+        }
+    }
+
+    // Обработка сообщений
+    private fun processMessage(client: SimpleTelegramClient?, message: Message, incomingText: String, senderName: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+
+            addMessageToHistory(message.chatId, senderName, incomingText)
+
+            // Action - Typing
+            val sendTypingActionRequest = SendChatAction().apply {
+                chatId = message.chatId
+                action = ChatActionTyping()
+            }
+            client?.send(sendTypingActionRequest)
+
+            val prompt = buildGeminiPrompt(incomingText, message.chatId, senderName)
+            println("Prompt для Gemini:\n$prompt")
+
+            rateLimiter.acquire()
+
+            // Вызов Gemini API
+            val geminiResponse = try {
+                geminiClient.generateContent(prompt)
+            } catch (e: Exception) {
+                println("Ошибка Gemini: ${e.message}")
+                return@launch
+            }
+
+            val botResponseText = if (geminiResponse.statusCode in 200..299) {
+                geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
+                    ?: "Подождите немного"
+            } else {
+                "Подождите немного"
+                //"Ошибка Gemini API: ${geminiResponse.statusCode}"
+            }
+
+            // Отправка ответа
+            val formattedText = FormattedText(botResponseText, emptyArray())
+            val inputMsg = InputMessageText().apply { text = formattedText }
+            val sendReq = SendMessage().apply {
+                chatId = message.chatId
+                inputMessageContent = inputMsg
+                replyTo = InputMessageReplyToMessage().apply { messageId = message.id }
+                if (message.messageThreadId != 0L) messageThreadId = message.messageThreadId
+            }
+            client?.sendMessage(sendReq, true)?.whenCompleteAsync { sendResult, sendError ->
+                if (sendError != null) {
+                    println("Ошибка отправки: ${sendError.message}")
+                } else {
+                    println("Ответ отправлен")
+                    addMessageToHistory(message.chatId, config.botName, botResponseText) // Сохраняем ответ
+                }
+            }
         }
     }
 
