@@ -1,14 +1,17 @@
 import com.github.demidko.telegram.TelegramStorage
 import com.github.sanctuscorvus.GeminiClient
+import com.google.common.util.concurrent.RateLimiter
 import it.tdlight.client.*
 import it.tdlight.jni.TdApi.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.nio.file.Paths
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 @Serializable
@@ -33,6 +36,9 @@ class GeminiBot(
     private var client: SimpleTelegramClient? = null
     private var botUserId: Long = 0L
 
+    private val rateLimiter = RateLimiter.create(10.0 / 60.0)
+
+    private val geminiDispatcher = Executors.newVirtualThreadPerTaskExecutor().asCoroutineDispatcher()
     private fun loadChatData(chatId: Long): ChatData {
         return telegramStorage[chatId] ?: ChatData()
     }
@@ -200,6 +206,8 @@ class GeminiBot(
                     val prompt = buildGeminiPrompt(incomingText, message.chatId, senderName)
                     println("Prompt для Gemini:\n$prompt")
 
+                    rateLimiter.acquire()
+
                     // Вызов Gemini API
                     val geminiResponse = try {
                         geminiClient.generateContent(prompt)
@@ -210,9 +218,10 @@ class GeminiBot(
 
                     val botResponseText = if (geminiResponse.statusCode in 200..299) {
                         geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-                            ?: "Занят..."
+                            ?: "Подождите немного"
                     } else {
-                        "Ошибка Gemini API: ${geminiResponse.statusCode}"
+                        "Подождите немного"
+                    //"Ошибка Gemini API: ${geminiResponse.statusCode}"
                     }
 
                     // Markdown parse - Опционально, т.к. видимо тут старая версия, ну или надо разбираться
