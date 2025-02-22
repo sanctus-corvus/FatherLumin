@@ -5,13 +5,11 @@ import it.tdlight.client.*
 import it.tdlight.jni.TdApi.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.nio.file.Paths
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 @Serializable
@@ -38,7 +36,6 @@ class GeminiBot(
 
     private val rateLimiter = RateLimiter.create(10.0 / 60.0)
 
-    private val geminiDispatcher = Executors.newVirtualThreadPerTaskExecutor().asCoroutineDispatcher()
     private fun loadChatData(chatId: Long): ChatData {
         return telegramStorage[chatId] ?: ChatData()
     }
