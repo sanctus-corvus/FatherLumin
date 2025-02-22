@@ -22,9 +22,7 @@ data class ReactionLogEntry(val userName: String, val reaction: String, val mess
 data class ChatData(
     val messages: List<ChatMessage> = emptyList(),
     val reactions: List<ReactionLogEntry> = emptyList(),
-    val answeredQuestions: Set<String> = emptySet()
 )
-
 
 class GeminiBot(
     private val config: BotConfig,
@@ -51,12 +49,6 @@ class GeminiBot(
         val newMessages = (chatData.messages + ChatMessage(userName, text, timestamp))
             .takeLast(config.historySize)
         saveChatData(chatId, chatData.copy(messages = newMessages))
-    }
-
-    fun updateAnsweredQuestions(chatId: Long, questionSummary: String) {
-        val chatData = loadChatData(chatId)
-        val newSet = chatData.answeredQuestions + questionSummary
-        saveChatData(chatId, chatData.copy(answeredQuestions = newSet))
     }
 
     fun buildGeminiPrompt(currentPrompt: String, chatId: Long, userName: String): String {
@@ -218,7 +210,7 @@ class GeminiBot(
                             ?: "Подождите немного"
                     } else {
                         "Подождите немного"
-                    //"Ошибка Gemini API: ${geminiResponse.statusCode}"
+                        //"Ошибка Gemini API: ${geminiResponse.statusCode}"
                     }
 
                     // Markdown parse - Опционально, т.к. видимо тут старая версия, ну или надо разбираться
@@ -247,7 +239,6 @@ class GeminiBot(
                         } else {
                             println("Ответ отправлен")
                             addMessageToHistory(message.chatId, config.botName, botResponseText) // Сохраняем ответ
-                            updateAnsweredQuestions(message.chatId, incomingText.take(30))
                         }
                     }
                 }
