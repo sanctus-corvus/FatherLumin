@@ -7,7 +7,7 @@ RUN gradle clean installDist
 
 FROM eclipse-temurin as backend
 WORKDIR /root
-COPY test-session ./app/test-session/
+
 RUN apt-get update && apt-get install -y libssl-dev
 
 COPY --from=builder /project/build/install/LuminBot/ ./app/
