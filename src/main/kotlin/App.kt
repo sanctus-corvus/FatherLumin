@@ -302,7 +302,7 @@ class GeminiBot(
     }
 
     private fun activePeriod(generalActiveTimeOffset: Duration, groupActiveHoursOffset: Duration, sleepPeriodOffset: Duration): Boolean {
-        val idahoZoneId = ZoneId.of("Asia/Almaty")
+        val idahoZoneId = ZoneId.of("America/Boise")
         val currentIdahoTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val formatter = DateTimeFormatter.ofPattern("HH:mm")
 
