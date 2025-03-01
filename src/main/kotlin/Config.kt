@@ -6,7 +6,9 @@ import java.nio.file.Paths
 
 object BotConfig {
 
-    private val localEnv = dotenv()
+    private val localEnv = dotenv {
+        ignoreIfMissing = true
+    }
     val telegramStorageChannelId: String = localEnv["STORAGE_ID"]
         ?: System.getenv("STORAGE_ID") ?: "STORAGE_ID не найден"
     val telegramBotToken: String = localEnv["TOKEN"]
