@@ -55,14 +55,9 @@ class GeminiBot(
     private var client: SimpleTelegramClient? = null
     private var botUserId: Long = 0L
 
-    private val rateLimiter = RateLimiter.create(10.0 / 60.0)
-
     val telegramRateLimiter: RateLimiter = RateLimiter.create(3.0 / 60.0)
 
     private val messageQueueMutex = Mutex()
-    private val sessionMutex = Mutex()
-
-    private val sessionDir = Paths.get("test-session")
 
     fun autoUpdateSession(
         sessionDir: Path,
@@ -139,19 +134,18 @@ class GeminiBot(
         telegramStorage[StorageKey.Chat(chatId)] = StorageValue.ChatDataValue(chatData)
     }
 
-    fun addMessageToHistory(chatId: Long, userName: String, text: String) {
+    private fun addMessageToHistory(chatId: Long, userName: String, text: String) {
         val currentTimestamp = java.time.LocalDateTime.now().format(
-            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         )
         val chatData = loadChatData(chatId)
         val newMessages = (chatData.messages + ChatMessage(userName, text, currentTimestamp)).takeLast(config.historySize)
-        // можно ограничить длину истории, если требуется
         saveChatData(chatId, chatData.copy(messages = newMessages))
         println("Добавлено сообщение для chatId $chatId от $userName: $text")
     }
 
 
-    fun buildGeminiPrompt(currentPrompt: String, chatId: Long, userName: String): String {
+    private fun buildGeminiPrompt(currentPrompt: String, chatId: Long, userName: String): String {
         val chatData = loadChatData(chatId)
 
         val historyText = chatData.messages.joinToString("\n") { "[${it.timestamp}] @${it.userName}: ${it.text}" }
