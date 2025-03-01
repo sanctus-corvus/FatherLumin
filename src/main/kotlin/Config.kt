@@ -8,9 +8,9 @@ object BotConfig {
 
     private val localEnv = dotenv()
     val telegramStorageChannelId: String = localEnv["STORAGE_ID"]
-        ?: "STORAGE_ID не найден"
+        ?: System.getenv("STORAGE_ID") ?: "STORAGE_ID не найден"
     val telegramBotToken: String = localEnv["TOKEN"]
-        ?: "TOKEN не найден"
+        ?: System.getenv("TOKEN") ?: "TOKEN не найден"
 
     val configKeys = listOf("GEMINI_API_KEY", "API_ID", "API_HASH", "PHONE", "GROUP_ID")
 
