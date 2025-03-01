@@ -302,7 +302,7 @@ class GeminiBot(
     }
 
     private fun activePeriod(generalActiveTimeOffset: Duration, groupActiveHoursOffset: Duration, sleepPeriodOffset: Duration): Boolean {
-        val idahoZoneId = ZoneId.of("America/Boise")
+        val idahoZoneId = ZoneId.of("Asia/Almaty")
         val currentIdahoTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val formatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -399,7 +399,7 @@ class GeminiBot(
         val clientFactory = SimpleTelegramClientFactory()
         val apiToken = APIToken(config.apiId.toInt(), config.apiHash)
         val settings = TDLibSettings.create(apiToken)
-        val sessionPath = Paths.get("test-session")
+        val sessionPath = Paths.get("app/test-session")
         settings.databaseDirectoryPath = sessionPath.resolve("data")
         settings.downloadedFilesDirectoryPath = sessionPath.resolve("downloads")
         val authSupplier = AuthenticationSupplier.user(config.phone)

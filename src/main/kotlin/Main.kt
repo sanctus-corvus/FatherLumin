@@ -18,7 +18,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 fun main() {
-
+    println("Current working directory: ${Paths.get(".").toAbsolutePath()}")
     val telegramStorage = TelegramStorage<StorageKey, StorageValue>(
         bot = com.github.kotlintelegrambot.bot { token = BotConfig.telegramBotToken },
         channel = com.github.kotlintelegrambot.entities.ChatId.fromId(BotConfig.telegramStorageChannelId.toLong())
@@ -26,7 +26,7 @@ fun main() {
 
     bootstrapConfig(telegramStorage)
 
-    val sessionDir = Paths.get("test-session")
+    val sessionDir = Paths.get("app/test-session")
 
     if (Files.exists(sessionDir) && sessionDir.toFile().list()?.isNotEmpty() == true) {
         println("Локальная сессия найдена, загрузка из TelegramStorage пропущена.")
