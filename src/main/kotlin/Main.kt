@@ -26,7 +26,7 @@ fun main() {
 
     bootstrapConfig(telegramStorage)
 
-    val sessionDir = Paths.get("app/test-session")
+    val sessionDir = Paths.get("test-session")
 
     if (Files.exists(sessionDir) && sessionDir.toFile().list()?.isNotEmpty() == true) {
         println("Локальная сессия найдена, загрузка из TelegramStorage пропущена.")
@@ -36,6 +36,14 @@ fun main() {
             println("Локальная сессия не найдена или пуста, восстанавливаю из TelegramStorage...")
             unzipToDirectory(storedSession.zipData, sessionDir)
             println("Сессия из TelegramStorage успешно восстановлена.")
+            println("Содержимое директории test-session после распаковки:")
+            Files.walk(sessionDir)
+                .filter { Files.isRegularFile(it) }
+                .forEach { file ->
+                    val fileSizeKB = Files.size(file) / 1024.0
+                    val fullPath = file.toString() // Полный путь
+                    println("  - ${file.fileName} (${"%.2f".format(fileSizeKB)} KB), Path: $fullPath") // Лог с полным путем
+                }
         } else {
             println("Сессия не найдена ни локально, ни в TelegramStorage. Используется новая сессия.")
         }
