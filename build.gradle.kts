@@ -25,7 +25,7 @@ dependencies {
     implementation("it.tdlight:tdlight-natives") {
         artifact {
             classifier = when (OS.CURRENT) {
-                OS.Linux -> "linux_amd64_gnu_ssl1"
+                OS.Linux -> "linux_amd64_gnu_ssl3"
                 OS.Windows -> "windows_amd64"
                 OS.macOS -> "macos_arm64"
                 else -> error("Unknown operating system ${OS.CURRENT}")
@@ -37,7 +37,7 @@ dependencies {
     implementation("com.github.demidko:telegram-storage:2025.02.15")
     implementation("com.github.sanctus-corvus:LuminaKt:0.1.1-2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
-    implementation("org.slf4j:slf4j-simple:2.0.16")
+    //implementation("org.slf4j:slf4j-simple:2.0.16")
     implementation("com.google.guava:guava:33.4.0-jre")
     testImplementation(kotlin("test"))
 }
