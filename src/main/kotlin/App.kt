@@ -8,6 +8,7 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.*
 import java.time.format.DateTimeFormatter
@@ -26,10 +27,30 @@ data class ChatData(
     val reactions: List<ReactionLogEntry> = emptyList(),
 )
 
+@Serializable
+sealed class StorageKey {
+    @Serializable
+    data class Chat(val chatId: Long) : StorageKey()
+    @Serializable
+    data class Config(val key: String) : StorageKey()
+    @Serializable
+    object Session : StorageKey()
+}
+
+@Serializable
+sealed class StorageValue {
+    @Serializable
+    data class ChatDataValue(val chatData: ChatData) : StorageValue()
+    @Serializable
+    data class ConfigValue(val value: String) : StorageValue()
+    @Serializable
+    data class SessionValue(val zipData: ByteArray) : StorageValue()
+}
+
 class GeminiBot(
     private val config: BotConfig,
     private val geminiClient: GeminiClient,
-    private val telegramStorage: TelegramStorage<Long, ChatData>
+    private val telegramStorage: TelegramStorage<StorageKey, StorageValue>
 ) {
     private var client: SimpleTelegramClient? = null
     private var botUserId: Long = 0L
@@ -39,23 +60,96 @@ class GeminiBot(
     val telegramRateLimiter: RateLimiter = RateLimiter.create(3.0 / 60.0)
 
     private val messageQueueMutex = Mutex()
+    private val sessionMutex = Mutex()
+
+    private val sessionDir = Paths.get("test-session")
+
+    fun autoUpdateSession(
+        sessionDir: Path,
+        telegramStorage: TelegramStorage<StorageKey, StorageValue>
+    ): Job = CoroutineScope(Dispatchers.IO).launch {
+        var isSessionSavedThisNight = false
+
+        while (isActive) {
+            if (isInactiveTimeForSessionSave()) {
+                if (!isSessionSavedThisNight) {
+                    try {
+                        println("Наступило неактивное время, запускаю ОДНОКРАТНОЕ сохранение сессии ночью...")
+                        saveSession(sessionDir, telegramStorage)
+                        println("Однократное сохранение сессии завершено. Ожидание следующей ночи.")
+                        isSessionSavedThisNight = true
+                    } catch (e: Exception) {
+                        println("Ошибка однократного сохранения сессии ночью: ${e.message}")
+                    }
+                } else {
+                    println("Сессия уже была сохранена этой ночью, пропускаю сохранение.")
+                }
+            } else {
+                println("Сейчас активное время, ждем наступления ночи...")
+                isSessionSavedThisNight = false
+            }
+            delay(Duration.ofHours(1).toMillis())
+        }
+    }
+
+    fun saveSession(
+        sessionDir: Path,
+        telegramStorage: TelegramStorage<StorageKey, StorageValue>
+    ) {
+        println("Начинаю сохранение сессии...")
+
+        // Остановка TDLib-light клиента
+        runBlocking {
+            client?.closeAsync()?.await()
+        }
+        println("TDLib-light клиент остановлен.")
+
+        val newZipData = zipDirectory(sessionDir)
+        val newHash = newZipData.contentHashCode()
+        val stored = telegramStorage[StorageKey.Session]
+        val storedHash = if (stored is StorageValue.SessionValue) {
+            stored.zipData.contentHashCode()
+        } else {
+            -1
+        }
+        if (newHash != storedHash) {
+            telegramStorage[StorageKey.Session] = StorageValue.SessionValue(newZipData)
+            println("Сессия обновлена в TelegramStorage.")
+        } else {
+            println("Сессия не изменилась – обновление не требуется.")
+        }
+
+        startTdlibClient()
+
+        println("Сохранение сессии завершено.")
+    }
+
+    fun startTdlibClient() {
+        println("Запускаю новый экземпляр TDLib-light клиента...")
+        start()
+        println("Новый экземпляр TDLib-light клиента запущен.")
+    }
 
     private fun loadChatData(chatId: Long): ChatData {
-        return telegramStorage[chatId] ?: ChatData()
+        val stored = telegramStorage[StorageKey.Chat(chatId)]
+        return if (stored is StorageValue.ChatDataValue) stored.chatData else ChatData()
     }
 
     private fun saveChatData(chatId: Long, chatData: ChatData) {
-        telegramStorage[chatId] = chatData
+        telegramStorage[StorageKey.Chat(chatId)] = StorageValue.ChatDataValue(chatData)
     }
 
     fun addMessageToHistory(chatId: Long, userName: String, text: String) {
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-        val timestamp = LocalDateTime.now().format(formatter)
+        val currentTimestamp = java.time.LocalDateTime.now().format(
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        )
         val chatData = loadChatData(chatId)
-        val newMessages = (chatData.messages + ChatMessage(userName, text, timestamp))
-            .takeLast(config.historySize)
+        val newMessages = (chatData.messages + ChatMessage(userName, text, currentTimestamp)).takeLast(config.historySize)
+        // можно ограничить длину истории, если требуется
         saveChatData(chatId, chatData.copy(messages = newMessages))
+        println("Добавлено сообщение для chatId $chatId от $userName: $text")
     }
+
 
     fun buildGeminiPrompt(currentPrompt: String, chatId: Long, userName: String): String {
         val chatData = loadChatData(chatId)
@@ -214,7 +308,7 @@ class GeminiBot(
     }
 
     private fun activePeriod(generalActiveTimeOffset: Duration, groupActiveHoursOffset: Duration, sleepPeriodOffset: Duration): Boolean {
-        val idahoZoneId = ZoneId.of("America/Boise")
+        val idahoZoneId = ZoneId.of("Asia/Almaty")
         val currentIdahoTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val formatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -293,6 +387,9 @@ class GeminiBot(
         }
     }
 
+    private fun isInactiveTimeForSessionSave(): Boolean {
+        return !activePeriod(generalActiveTimeOffset, groupActiveHoursOffset, sleepPeriodOffset)
+    }
     // иммитация чтения
     private suspend fun simulateReading(
         incomingText: String,
@@ -306,7 +403,7 @@ class GeminiBot(
     }
     fun start() {
         val clientFactory = SimpleTelegramClientFactory()
-        val apiToken = APIToken(config.apiId, config.apiHash)
+        val apiToken = APIToken(config.apiId.toInt(), config.apiHash)
         val settings = TDLibSettings.create(apiToken)
         val sessionPath = Paths.get("test-session")
         settings.databaseDirectoryPath = sessionPath.resolve("data")

@@ -1,8 +1,46 @@
+import BotConfig.bootstrapConfig
 import com.github.demidko.telegram.TelegramStorage.Constructors.TelegramStorage
 import com.github.sanctuscorvus.GeminiClient
 import com.github.sanctuscorvus.SafetyCategory
+import io.github.cdimascio.dotenv.Dotenv
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
+import java.util.zip.Deflater
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 fun main() {
+
+    val telegramStorage = TelegramStorage<StorageKey, StorageValue>(
+        bot = com.github.kotlintelegrambot.bot { token = BotConfig.telegramBotToken },
+        channel = com.github.kotlintelegrambot.entities.ChatId.fromId(BotConfig.telegramStorageChannelId.toLong())
+    )
+
+    bootstrapConfig(telegramStorage)
+
+    val sessionDir = Paths.get("test-session")
+
+    if (Files.exists(sessionDir) && sessionDir.toFile().list()?.isNotEmpty() == true) {
+        println("Локальная сессия найдена, загрузка из TelegramStorage пропущена.")
+    } else {
+        val storedSession = telegramStorage[StorageKey.Session]
+        if (storedSession is StorageValue.SessionValue) {
+            println("Локальная сессия не найдена или пуста, восстанавливаю из TelegramStorage...")
+            unzipToDirectory(storedSession.zipData, sessionDir)
+            println("Сессия из TelegramStorage успешно восстановлена.")
+        } else {
+            println("Сессия не найдена ни локально, ни в TelegramStorage. Используется новая сессия.")
+        }
+    }
+
     val geminiClient = GeminiClient(
         GeminiClient.Configuration.create(
             apiKey = BotConfig.geminiApiKey,
@@ -16,16 +54,44 @@ fun main() {
             }
         ))
 
-    val telegramStorage = TelegramStorage<Long, ChatData>(
-        bot = com.github.kotlintelegrambot.bot { token = BotConfig.telegramBotToken },
-        channel = com.github.kotlintelegrambot.entities.ChatId.fromId(BotConfig.telegramStorageChannelId.toLong())
-    )
-
     val chatBot = GeminiBot(BotConfig, geminiClient, telegramStorage)
-    chatBot.start()
 
-    /*    println("bot запущен")
-        while (true) {
-            Thread.sleep(10000)
-        }*/
+    chatBot.start()
+    chatBot.autoUpdateSession(sessionDir, telegramStorage)
+
+
+}
+
+fun zipDirectory(sourceDirPath: Path): ByteArray {
+    val byteArrayOutputStream = ByteArrayOutputStream()
+    ZipOutputStream(byteArrayOutputStream).use { zipOut ->
+        zipOut.setLevel(Deflater.BEST_COMPRESSION)
+        Files.walk(sourceDirPath).filter { Files.isRegularFile(it) }.forEach { filePath ->
+            val relativePath = sourceDirPath.relativize(filePath).toString()
+            val zipEntry = ZipEntry(relativePath).apply {
+                method = ZipEntry.DEFLATED
+            }
+            zipOut.putNextEntry(zipEntry)
+            Files.copy(filePath, zipOut)
+            zipOut.closeEntry()
+        }
+    }
+    return byteArrayOutputStream.toByteArray()
+}
+
+fun unzipToDirectory(zipData: ByteArray, targetDir: Path) {
+    ZipInputStream(ByteArrayInputStream(zipData)).use { zipIn ->
+        var entry: ZipEntry? = zipIn.nextEntry
+        while (entry != null) {
+            val filePath = targetDir.resolve(entry.name)
+            if (entry.isDirectory) {
+                Files.createDirectories(filePath)
+            } else {
+                Files.createDirectories(filePath.parent)
+                Files.copy(zipIn, filePath, StandardCopyOption.REPLACE_EXISTING)
+            }
+            zipIn.closeEntry()
+            entry = zipIn.nextEntry
+        }
+    }
 }
