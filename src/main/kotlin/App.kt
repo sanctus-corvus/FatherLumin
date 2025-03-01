@@ -55,7 +55,7 @@ class GeminiBot(
     private var client: SimpleTelegramClient? = null
     private var botUserId: Long = 0L
 
-    val telegramRateLimiter: RateLimiter = RateLimiter.create(3.0 / 60.0)
+    private val telegramRateLimiter: RateLimiter = RateLimiter.create(3.0 / 60.0)
 
     private val messageQueueMutex = Mutex()
 
@@ -87,7 +87,7 @@ class GeminiBot(
         }
     }
 
-    fun saveSession(
+    private fun saveSession(
         sessionDir: Path,
         telegramStorage: TelegramStorage<StorageKey, StorageValue>
     ) {
@@ -119,7 +119,7 @@ class GeminiBot(
         println("Сохранение сессии завершено.")
     }
 
-    fun startTdlibClient() {
+    private fun startTdlibClient() {
         println("Запускаю новый экземпляр TDLib-light клиента...")
         start()
         println("Новый экземпляр TDLib-light клиента запущен.")
@@ -497,7 +497,7 @@ class GeminiBot(
 
         kotlinx.coroutines.delay(delayMillis)
     }*/
-    suspend fun simulateTyping(
+    private suspend fun simulateTyping(
         chatId: Long,
         messageThreadId: Long?, // Можно передать null или 0L, если нет треда
         responseText: String,
@@ -600,11 +600,6 @@ class GeminiBot(
         }
     }
 
-
-    fun stop() {
-        client?.close()
-    }
-
     fun listChatIds() {
         CoroutineScope(Dispatchers.IO).launch {
             val getChatsRequest = GetChats(ChatListMain(), 100)
@@ -612,7 +607,7 @@ class GeminiBot(
 
             if (chatsResult is Chats) {
                 val chatIds = chatsResult.chatIds
-                println("Список чатов, где состоит бот (ID - Название):")
+                println("Список чатов, где состоит пользователь:")
                 chatIds.forEach { chatId ->
                     val getChatRequest = GetChat(chatId)
                     val chat = client?.send(getChatRequest)?.await()
