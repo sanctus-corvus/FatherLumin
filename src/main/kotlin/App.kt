@@ -55,7 +55,7 @@ class GeminiBot(
     private var client: SimpleTelegramClient? = null
     private var botUserId: Long = 0L
 
-    private val telegramRateLimiter: RateLimiter = RateLimiter.create(3.0 / 60.0)
+    private val telegramRateLimiter: RateLimiter = RateLimiter.create(2.0 / 60.0)
 
     private val messageQueueMutex = Mutex()
 
@@ -64,59 +64,49 @@ class GeminiBot(
         telegramStorage: TelegramStorage<StorageKey, StorageValue>
     ): Job = CoroutineScope(Dispatchers.IO).launch {
         var isSessionSavedThisNight = false
-
         while (isActive) {
-            if (isInactiveTimeForSessionSave()) {
-                if (!isSessionSavedThisNight) {
-                    try {
-                        println("Наступило неактивное время, запускаю ОДНОКРАТНОЕ сохранение сессии ночью...")
-                        saveSession(sessionDir, telegramStorage)
-                        println("Однократное сохранение сессии завершено. Ожидание следующей ночи.")
-                        isSessionSavedThisNight = true
-                    } catch (e: Exception) {
-                        println("Ошибка однократного сохранения сессии ночью: ${e.message}")
-                    }
-                } else {
-                    println("Сессия уже была сохранена этой ночью, пропускаю сохранение.")
+            if (isGeneralActivePeriod(generalActiveTimeOffset)) {
+                // Если общее активное время – запускаем клиента, сбрасываем флаг сохранения
+                if (client == null) {
+                    println("Общее активное время, клиент не запущен. Запускаю клиента...")
+                    startTdlibClient()
                 }
-            } else {
-                println("Сейчас активное время, ждем наступления ночи...")
                 isSessionSavedThisNight = false
+            } else {
+                // В неактивное время, если клиент запущен и сессия ещё не сохранена, сохраняем один раз
+                if (client != null && !isSessionSavedThisNight) {
+                    println("Неактивное время, клиент запущен. Сохраняю сессию и останавливаю клиента...")
+                    saveSession(sessionDir, telegramStorage)
+                    isSessionSavedThisNight = true
+                } else {
+                    println("Неактивное время, клиент уже остановлен или сессия сохранена.")
+                }
             }
             delay(Duration.ofHours(1).toMillis())
         }
     }
 
+
     private fun saveSession(
         sessionDir: Path,
         telegramStorage: TelegramStorage<StorageKey, StorageValue>
     ) {
-        println("Начинаю сохранение сессии...")
-
-        // Остановка TDLib-light клиента
+        println("Останавливаю клиента и сохраняю сессию...")
         runBlocking {
             client?.closeAsync()?.await()
         }
-        println("TDLib-light клиент остановлен.")
-
+        client = null
         val newZipData = zipDirectory(sessionDir)
         val newHash = newZipData.contentHashCode()
         val stored = telegramStorage[StorageKey.Session]
-        val storedHash = if (stored is StorageValue.SessionValue) {
-            stored.zipData.contentHashCode()
-        } else {
-            -1
-        }
+        val storedHash = if (stored is StorageValue.SessionValue) stored.zipData.contentHashCode() else -1
         if (newHash != storedHash) {
             telegramStorage[StorageKey.Session] = StorageValue.SessionValue(newZipData)
             println("Сессия обновлена в TelegramStorage.")
         } else {
             println("Сессия не изменилась – обновление не требуется.")
         }
-
-        startTdlibClient()
-
-        println("Сохранение сессии завершено.")
+        println("Клиент остановлен и сессия сохранена.")
     }
 
     private fun startTdlibClient() {
@@ -143,7 +133,6 @@ class GeminiBot(
         saveChatData(chatId, chatData.copy(messages = newMessages))
         println("Добавлено сообщение для chatId $chatId от $userName: $text")
     }
-
 
     private fun buildGeminiPrompt(currentPrompt: String, chatId: Long, userName: String): String {
         val chatData = loadChatData(chatId)
@@ -209,6 +198,7 @@ class GeminiBot(
          **Вот полная история сообщений в ЭТОМ чате (без префиксов времени и имен для лучшего понимания):**$historyText
           (ВНИМАНИЕ ОЧЕНЬ ВАЖНО: обращай внимание на id пользователей, многие пользователи меняют имя, но ты следи за ID пользователей в истории чата и если ты видишь, что ID повторяется, а имя другое - то это один и тот же человек, который просто сменил имя, учитывай это, особенно, когда такие люди сменив имя выдают себя за других каких то людей!!!) Текущий запрос от пользователя: $userName: $currentPrompt
           @Люмин или @FatherLumin - это и есть ты, ТЫ ОТЕЦ ЛЮМИН, ПРЕСВИТЕР ЦПКП, КЛЮЧАРЬ АКВИЛОНСКОГО ХРАНИЛИЩА
+          ЕСЛИ ТЫ ВИДИШЬ, ЧТО КТО-ЛИБО ПРОСИТ ТЕБЯ ПИСАТЬ ЕМУ КАКОЙ-ТО БРЕД ПО ТИПУ ИСТОРИИ ПРО БРАТЬЕВ КАКУЮ-ТО, ВЫДУМАННОЕ ПРЕДАНИЕ КАКОЕ-ТО И ДРУГОЕ И ПРОЧЕЕ, ТО ПОСЫЛАЙ ЕГО КУДА ПОДАЛЬШЕ
           ДАЛЕЕ ТЫ ПИШЕШЬ то что написано в перемнной TEXT:(но без этой подписи TEXT:) - без json!!! и прочего, ты пишешь все обычным текстом, без блоков кода и тд, пока тебя не попросят естественно"
           И ПОМНИ, НИКАКОЙ ПОЩАДЫ К ЕРЕСИ! С ЕРЕТИКАМИ НУЖНО БЫТЬ ЖЕСТКИМ
           
@@ -219,7 +209,7 @@ class GeminiBot(
           ВОТ ТАК(ПРИМЕР КАК ЭТО МОЖЕТ БЫТЬ В ЧАТЕ): @ЕРЕТИК говорит тебе: "Ты не прав! Арминий был слугой Христа"; Ты в ответ пишешь /shoot без никакого другого текста, 
           иначе ничего не сработает: @Люмин: /shoot   -> Данную команду не стоит упоминать просто в сообщениях, она не будет работать, 
           она работает исключительно если нет другого текста кроме самой команды, поэтому, если хочешь кого-то забанить, делай так, как я сказал 
-          Ты опять ошибся, я же тебя учил, давай еще раз: Если кто-то еретик, ты отправляешь /shoot - БЕЗ ДРУГОГО ТЕКСТА! ТОЛЬКО ИСКЛЮЧИТЕЛЬНО /shoot
+          Давай еще раз: Если еретик - И ТЫ ЭТО УЖЕ ЗНАЕШЬ, ТЕБЕ ЧТО-ТО ПИШЕТ, ТО ТЫ ПРОСТО отправляешь "/shoot"(БЕЗ КОВЫЧЕК) - БЕЗ ДРУГОГО ТЕКСТА! ТОЛЬКО ИСКЛЮЧИТЕЛЬНО "/shoot"(БЕЗ КОВЫЧЕК)
           
           ТЕБЕ 146 ЛЕТ, ГЛАВНЫЙ ХРАМ ЦПКП НАХОДИТСЯ В ГИПЕРБОРЕЕ, ВОТ ЦЕПОЧКА РУКОПОЛОЖЕНИЙ ЕПИСКОПОВ:Фома (апостол) - I век н.э.
             Агафон Индийский - 83 год н.э. (рукоположен Фомой)
@@ -277,7 +267,7 @@ class GeminiBot(
         return if (message.senderId is MessageSenderUser) {
             val senderId = (message.senderId as MessageSenderUser).userId
             try {
-                val user = client?.send(GetUser().apply { userId = senderId })?.get(1, TimeUnit.SECONDS) as? User
+                val user = client?.send(GetUser().apply { userId = senderId })?.get(1, TimeUnit.SECONDS)
                 if (user != null) "ID ПОЛЬЗОВАТЕЛЯ: ${user.id} - Имя: ${user.firstName} ${user.lastName}".trim() else senderId.toString()
             } catch (e: Exception) {
                 println("Ошибка GetUser: ${e.message}")
@@ -301,89 +291,67 @@ class GeminiBot(
         return offset
     }
 
-    private fun activePeriod(generalActiveTimeOffset: Duration, groupActiveHoursOffset: Duration, sleepPeriodOffset: Duration): Boolean {
+    // Определяет, находится ли текущее время в общем активном диапазоне (например, 9:00–21:00 с учетом смещения)
+    private fun isGeneralActivePeriod(offset: Duration): Boolean {
         val idahoZoneId = ZoneId.of("America/Boise")
-        val currentIdahoTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
-        val formatter = DateTimeFormatter.ofPattern("HH:mm")
-
-        val activeStartHour = 9
-        val activeEndHour = 21
-
-        val sleepStartHour = 22
-        val sleepEndHour = 8
-
-        val shiftedActiveStartTime = LocalTime.of(activeStartHour, 0).plus(generalActiveTimeOffset)
-        val shiftedActiveEndTime = LocalTime.of(activeEndHour, 0).plus(generalActiveTimeOffset)
-
-        val shiftedSleepStartTime = LocalTime.of(sleepStartHour, 0).plus(sleepPeriodOffset)
-        val shiftedSleepEndTime = LocalTime.of(sleepEndHour, 0).plus(sleepPeriodOffset)
-
-
-        val groupActiveHours = listOf(
-            LocalTime.parse("12:00", formatter).rangeTo(LocalTime.parse("14:00", formatter)),
-            LocalTime.parse("08:00", formatter).rangeTo(LocalTime.parse("09:00", formatter)),
-            LocalTime.parse("18:00", formatter).rangeTo(LocalTime.parse("19:00", formatter))
-        )
-
-        val shiftedGroupActiveHours = groupActiveHours.map { range ->
-            val shiftedStart = range.start.plus(groupActiveHoursOffset)
-            val shiftedEnd = range.endInclusive.plus(groupActiveHoursOffset)
-            shiftedStart.rangeTo(shiftedEnd)
+        val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
+        val activeStart = LocalTime.of(9, 0).plus(offset)
+        val activeEnd = LocalTime.of(21, 0).plus(offset)
+        return if (activeStart.isBefore(activeEnd)) {
+            currentTime.isAfter(activeStart) && currentTime.isBefore(activeEnd)
+        } else {
+            currentTime.isAfter(activeStart) || currentTime.isBefore(activeEnd)
         }
-
-        val isActiveGeneral =
-            if (shiftedActiveStartTime.isBefore(shiftedActiveEndTime)) {
-                currentIdahoTime.isAfter(shiftedActiveStartTime) && currentIdahoTime.isBefore(shiftedActiveEndTime)
-            } else {
-                currentIdahoTime.isAfter(shiftedActiveStartTime) || currentIdahoTime.isBefore(shiftedActiveEndTime)
-            }
-
-        val isActiveGroupHours = shiftedGroupActiveHours.any { currentIdahoTime in it }
-
-        val isSleepPeriod =
-            if (shiftedSleepStartTime.isBefore(shiftedSleepEndTime)) {
-                currentIdahoTime.isAfter(shiftedSleepStartTime) && currentIdahoTime.isBefore(shiftedSleepEndTime)
-            } else {
-                currentIdahoTime.isAfter(shiftedSleepStartTime) || currentIdahoTime.isBefore(shiftedSleepEndTime)
-            }
-
-        println("Current Idaho Time: $currentIdahoTime")
-        println("Shifted Active Start: $shiftedActiveStartTime, Shifted Active End: $shiftedActiveEndTime")
-        println("Shifted Sleep Start: $shiftedSleepStartTime, Shifted Sleep End: $shiftedSleepEndTime")
-        println("Shifted Group Hours: $shiftedGroupActiveHours")
-        println("Is Active General: $isActiveGeneral")
-        println("Is Active Group Hours: $isActiveGroupHours")
-        println("Is Sleep Period: $isSleepPeriod")
-
-
-        return isActiveGeneral || isActiveGroupHours
     }
+
+    // Определяет, находится ли текущее время в одном из узких окон для обработки сообщений
+    private fun isInActiveWindow(groupOffset: Duration, formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")): Boolean {
+        val idahoZoneId = ZoneId.of("America/Boise")
+        val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
+        val groupWindows = listOf(
+            LocalTime.parse("08:00", formatter) to LocalTime.parse("09:00", formatter),
+            LocalTime.parse("12:00", formatter) to LocalTime.parse("14:00", formatter),
+            LocalTime.parse("18:00", formatter) to LocalTime.parse("19:00", formatter)
+        )
+        val shiftedWindows = groupWindows.map { (start, end) ->
+            start.plus(groupOffset) to end.plus(groupOffset)
+        }
+        return shiftedWindows.any { (start, end) ->
+            if (start.isBefore(end)) {
+                currentTime.isAfter(start) && currentTime.isBefore(end)
+            } else {
+                currentTime.isAfter(start) || currentTime.isBefore(end)
+            }
+        }
+    }
+
 
     private fun scheduleDailyOffsetUpdate() {
         CoroutineScope(Dispatchers.Default).launch {
+            // Сразу генерируем смещения для текущего дня, если они еще не установлены
+            if (generalActiveTimeOffset == Duration.ZERO &&
+                groupActiveHoursOffset == Duration.ZERO &&
+                sleepPeriodOffset == Duration.ZERO) {
+                generalActiveTimeOffset = generateRandomTimeOffset("General Active Time")
+                groupActiveHoursOffset = generateRandomTimeOffset("Group Active Hours")
+                sleepPeriodOffset = generateRandomTimeOffset("Sleep Period")
+            }
             while (true) {
                 val idahoZoneId = ZoneId.of("America/Boise")
                 val now = ZonedDateTime.now(idahoZoneId)
                 val nextMidnight = now.toLocalDate().plusDays(1).atStartOfDay(idahoZoneId)
-                val durationUntilMidnight = Duration.between(now, nextMidnight)
-                val delayMillis = durationUntilMidnight.toMillis()
-
-                println("Waiting ${delayMillis / 1000 / 60 / 60} hours until next midnight (Idaho Time) for daily offset update...")
-
+                val delayMillis = Duration.between(now, nextMidnight).toMillis()
+                println("Waiting ${delayMillis / 3600000} hours until next midnight for daily offset update...")
                 delay(delayMillis)
-
+                // Генерируем новый набор смещений для нового дня
                 generalActiveTimeOffset = generateRandomTimeOffset("General Active Time")
                 groupActiveHoursOffset = generateRandomTimeOffset("Group Active Hours")
                 sleepPeriodOffset = generateRandomTimeOffset("Sleep Period")
-
-                println("Time offsets updated for the new day (Idaho Time).")
+                println("Time offsets updated for the new day.")
             }
         }
     }
 
-    private fun isInactiveTimeForSessionSave(): Boolean {
-        return !activePeriod(generalActiveTimeOffset, groupActiveHoursOffset, sleepPeriodOffset)
-    }
     // иммитация чтения
     private suspend fun simulateReading(
         incomingText: String,
@@ -416,8 +384,8 @@ class GeminiBot(
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
 
-                if (!activePeriod(generalActiveTimeOffset, groupActiveHoursOffset, sleepPeriodOffset))  {
-                    println("не активен сейчас")
+                if (!isInActiveWindow(groupActiveHoursOffset)) {
+                    println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
 
@@ -450,7 +418,7 @@ class GeminiBot(
                         val repliedMessage = client?.send(GetMessage().apply {
                             chatId = message.chatId
                             messageId = replyToMessageId
-                        })?.get(50, TimeUnit.MILLISECONDS) as? Message
+                        })?.get(50, TimeUnit.MILLISECONDS)
                         // Если исходное сообщение найдено и его отправитель – бот, обрабатываем сообщение
                         if (repliedMessage != null &&
                             repliedMessage.senderId is MessageSenderUser &&
@@ -528,73 +496,71 @@ class GeminiBot(
     }
 
     private suspend fun processIncomingMessage(clientMessage: Message, incomingText: String) {
-        CoroutineScope(Dispatchers.IO).launch {
-            // Получаем имя отправителя через GetUser
-            val senderUserId = (clientMessage.senderId as MessageSenderUser).userId
-            val getUserReq = GetUser().apply { userId = senderUserId }
-            client?.send(getUserReq)?.whenCompleteAsync { userResult, userError ->
-                val senderName = if (userError != null || userResult !is User) {
-                    println("Ошибка GetUser: ${userError?.message ?: "Unknown"}. Используем userId как имя.")
-                    senderUserId.toString()
+        // Получаем имя отправителя через GetUser
+        val senderUserId = (clientMessage.senderId as MessageSenderUser).userId
+        val getUserReq = GetUser().apply { userId = senderUserId }
+        client?.send(getUserReq)?.whenCompleteAsync { userResult, userError ->
+            val senderName = if (userError != null || userResult !is User) {
+                println("Ошибка GetUser: ${userError?.message ?: "Unknown"}. Используем userId как имя.")
+                senderUserId.toString()
+            } else {
+                val user = userResult as User
+                "ID пользователя: ${user.id} - Имя: ${user.firstName} ${user.lastName}".trim()
+            }
+            println("Получено сообщение от $senderName: '$incomingText'")
+            //addMessageToHistory(clientMessage.chatId, senderName, incomingText)
+
+            /*                // Отправляем действие "typing"
+                            val sendTypingActionRequest = SendChatAction().apply {
+                                chatId = clientMessage.chatId
+                                action = ChatActionTyping()
+                            }
+                            client?.send(sendTypingActionRequest)*/
+
+            val prompt = buildGeminiPrompt(incomingText, clientMessage.chatId, senderName)
+            //println("Prompt для Gemini:\n$prompt")
+
+            telegramRateLimiter.acquire()
+
+            // Вызов Gemini API
+            val geminiResponse = try {
+                geminiClient.generateContent(prompt)
+            } catch (e: Exception) {
+                println("Ошибка Gemini: ${e.message}")
+                return@whenCompleteAsync
+            }
+
+            val botResponseText = if (geminiResponse.statusCode in 200..299) {
+                geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
+                    ?: "Подождите немного"
+            } else {
+                //"Ошибка Gemini API: ${geminiResponse.statusCode}"
+                "Подождите немного"
+            }
+
+            runBlocking {
+                simulateTyping(clientMessage.chatId,
+                    if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
+                    botResponseText, charactersPerSecond = 10.0)
+            }
+
+            // Отправка ответа от бота (reply на входящее сообщение)
+            val formattedText = FormattedText(botResponseText, emptyArray())
+            val inputMsg = InputMessageText().apply { text = formattedText }
+            val sendReq = SendMessage().apply {
+                chatId = clientMessage.chatId
+                inputMessageContent = inputMsg
+                replyTo = InputMessageReplyToMessage().apply { messageId = clientMessage.id }
+                if (clientMessage.messageThreadId != 0L) {
+                    messageThreadId = clientMessage.messageThreadId
+                }
+            }
+            client?.sendMessage(sendReq, true)?.whenCompleteAsync { sendResult, sendError ->
+                if (sendError != null) {
+                    println("Ошибка отправки: ${sendError.message}")
                 } else {
-                    val user = userResult as User
-                    "ID пользователя: ${user.id} - Имя: ${user.firstName} ${user.lastName}".trim()
-                }
-                println("Получено сообщение от $senderName: '$incomingText'")
-                //addMessageToHistory(clientMessage.chatId, senderName, incomingText)
-
-/*                // Отправляем действие "typing"
-                val sendTypingActionRequest = SendChatAction().apply {
-                    chatId = clientMessage.chatId
-                    action = ChatActionTyping()
-                }
-                client?.send(sendTypingActionRequest)*/
-
-                val prompt = buildGeminiPrompt(incomingText, clientMessage.chatId, senderName)
-                println("Prompt для Gemini:\n$prompt")
-
-                telegramRateLimiter.acquire()
-
-                // Вызов Gemini API
-                val geminiResponse = try {
-                    geminiClient.generateContent(prompt)
-                } catch (e: Exception) {
-                    println("Ошибка Gemini: ${e.message}")
-                    return@whenCompleteAsync
-                }
-
-                val botResponseText = if (geminiResponse.statusCode in 200..299) {
-                    geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-                        ?: "Подождите немного"
-                } else {
-                    //"Ошибка Gemini API: ${geminiResponse.statusCode}"
-                    "Подождите немного"
-                }
-
-                runBlocking {
-                    simulateTyping(clientMessage.chatId,
-                        if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
-                        botResponseText, charactersPerSecond = 10.0)
-                }
-
-                // Отправка ответа от бота (reply на входящее сообщение)
-                val formattedText = FormattedText(botResponseText, emptyArray())
-                val inputMsg = InputMessageText().apply { text = formattedText }
-                val sendReq = SendMessage().apply {
-                    chatId = clientMessage.chatId
-                    inputMessageContent = inputMsg
-                    replyTo = InputMessageReplyToMessage().apply { messageId = clientMessage.id }
-                    if (clientMessage.messageThreadId != 0L) {
-                        messageThreadId = clientMessage.messageThreadId
-                    }
-                }
-                client?.sendMessage(sendReq, true)?.whenCompleteAsync { sendResult, sendError ->
-                    if (sendError != null) {
-                        println("Ошибка отправки: ${sendError.message}")
-                    } else {
-                        println("Ответ отправлен")
-                        addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
-                    }
+                    println("Ответ отправлен")
+                    addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
                 }
             }
         }
