@@ -53,7 +53,7 @@ fun main() {
     val geminiClient = GeminiClient(
         GeminiClient.Configuration.create(
             apiKey = BotConfig.geminiApiKey,
-            modelName = GeminiClient.GeminiModel.GEMINI_20FLASH_EXP,
+            modelName = GeminiClient.GeminiModel.GEMINI_20FLASH_PRO,
             safetySettingsBuilder = {
                 blockNone(SafetyCategory.HARM_CATEGORY_HATE_SPEECH)
                 blockNone(SafetyCategory.HARM_CATEGORY_HARASSMENT)
