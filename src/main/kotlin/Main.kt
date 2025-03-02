@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -74,18 +75,22 @@ fun zipDirectory(sourceDirPath: Path): ByteArray {
     val byteArrayOutputStream = ByteArrayOutputStream()
     ZipOutputStream(byteArrayOutputStream).use { zipOut ->
         zipOut.setLevel(Deflater.BEST_COMPRESSION)
-        Files.walk(sourceDirPath).filter { Files.isRegularFile(it) }.forEach { filePath ->
-            val relativePath = sourceDirPath.relativize(filePath).toString()
-            val zipEntry = ZipEntry(relativePath).apply {
-                method = ZipEntry.DEFLATED
+        Files.walk(sourceDirPath)
+            .filter { Files.isRegularFile(it) }
+            .forEach { filePath ->
+                // Нормализуем путь, заменяя обратные слэши на прямые
+                val relativePath = sourceDirPath.relativize(filePath).toString().replace(File.separatorChar, '/')
+                val zipEntry = ZipEntry(relativePath).apply {
+                    method = ZipEntry.DEFLATED
+                }
+                zipOut.putNextEntry(zipEntry)
+                Files.copy(filePath, zipOut)
+                zipOut.closeEntry()
             }
-            zipOut.putNextEntry(zipEntry)
-            Files.copy(filePath, zipOut)
-            zipOut.closeEntry()
-        }
     }
     return byteArrayOutputStream.toByteArray()
 }
+
 
 fun unzipToDirectory(zipData: ByteArray, targetDir: Path) {
     ZipInputStream(ByteArrayInputStream(zipData)).use { zipIn ->
