@@ -314,11 +314,11 @@ class GeminiBot(
         return offset
     }
 
-    // Определяет, находится ли текущее время в общем активном диапазоне (например, 9:00–21:00 с учетом смещения)
+    // Определяет, находится ли текущее время в общем активном диапазоне
     private fun isGeneralActivePeriod(offset: Duration): Boolean {
         val idahoZoneId = ZoneId.of("America/Boise")
         val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
-        val activeStart = LocalTime.of(9, 0).plus(offset)
+        val activeStart = LocalTime.of(8, 0).plus(offset)
         val activeEnd = LocalTime.of(21, 0).plus(offset)
         return if (activeStart.isBefore(activeEnd)) {
             currentTime.isAfter(activeStart) && currentTime.isBefore(activeEnd)
@@ -332,7 +332,7 @@ class GeminiBot(
         val idahoZoneId = ZoneId.of("America/Boise")
         val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val groupWindows = listOf(
-            LocalTime.parse("08:00", formatter) to LocalTime.parse("09:00", formatter),
+            LocalTime.parse("10:00", formatter) to LocalTime.parse("11:00", formatter),
             LocalTime.parse("12:00", formatter) to LocalTime.parse("14:00", formatter),
             LocalTime.parse("18:00", formatter) to LocalTime.parse("19:00", formatter)
         )
@@ -347,7 +347,6 @@ class GeminiBot(
             }
         }
     }
-
 
     private fun scheduleDailyOffsetUpdate() {
         CoroutineScope(Dispatchers.Default).launch {
