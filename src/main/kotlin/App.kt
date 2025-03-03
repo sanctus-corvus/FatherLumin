@@ -337,7 +337,7 @@ class GeminiBot(
 
     // Определяет, находится ли текущее время в общем активном диапазоне
     private fun isGeneralActivePeriod(offset: Duration): Boolean {
-        val idahoZoneId = ZoneId.of("Asia/Almaty")
+        val idahoZoneId = ZoneId.of("America/Boise")
         val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val activeStart = LocalTime.of(8, 0).plus(offset)
         val activeEnd = LocalTime.of(21, 0).plus(offset)
@@ -353,9 +353,9 @@ class GeminiBot(
         val idahoZoneId = ZoneId.of("America/Boise")
         val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val groupWindows = listOf(
-            LocalTime.parse("10:00", formatter) to LocalTime.parse("11:00", formatter),
-            LocalTime.parse("12:00", formatter) to LocalTime.parse("14:00", formatter),
-            LocalTime.parse("18:00", formatter) to LocalTime.parse("19:00", formatter)
+            LocalTime.parse("00:00", formatter) to LocalTime.parse("00:00", formatter),
+           // LocalTime.parse("12:00", formatter) to LocalTime.parse("14:00", formatter),
+           // LocalTime.parse("18:00", formatter) to LocalTime.parse("19:00", formatter)
         )
         val shiftedWindows = groupWindows.map { (start, end) ->
             start.plus(groupOffset) to end.plus(groupOffset)
@@ -427,7 +427,7 @@ class GeminiBot(
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
 
-                if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
+                if (!isInActiveWindow(groupActiveHoursOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
@@ -591,6 +591,7 @@ class GeminiBot(
             }
         }
         try {
+            telegramRateLimiter.acquire()
             client?.sendMessage(sendReq, true)?.await()
             println("Ответ отправлен")
             addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
