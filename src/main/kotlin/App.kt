@@ -336,7 +336,7 @@ class GeminiBot(
 
     // Определяет, находится ли текущее время в общем активном диапазоне
     private fun isGeneralActivePeriod(offset: Duration): Boolean {
-        val idahoZoneId = ZoneId.of("America/Boise")
+        val idahoZoneId = ZoneId.of("Asia/Almaty")
         val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val activeStart = LocalTime.of(8, 0).plus(offset)
         val activeEnd = LocalTime.of(21, 0).plus(offset)
@@ -426,7 +426,7 @@ class GeminiBot(
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
 
-                if (!isInActiveWindow(groupActiveHoursOffset)) {
+                if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
