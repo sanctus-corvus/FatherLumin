@@ -66,7 +66,6 @@ class GeminiBot(
         var isSessionSavedThisNight = false
         while (isActive) {
             if (isGeneralActivePeriod(generalActiveTimeOffset)) {
-                // Если общее активное время – запускаем клиента, сбрасываем флаг сохранения
                 if (client == null) {
                     println("Общее активное время, клиент не запущен. Запускаю клиента...")
                     startTdlibClient()
