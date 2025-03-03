@@ -284,6 +284,7 @@ class GeminiBot(
           НИКОГДА БОЛЬШЕ НЕ ПИШИ "Enter a *Question* to let DarkGenimi answer to it" или "Enter a Question to let Люмин answer to it" 
           или "TEXT:" или "Люмин:" - НЕ СТАВЬ НИКАКИЕ ПРЕФИКСЫ И ТОМУ ПОДОБНЫЕ В СВОИ СООБЩЕНИЯ! ПИШИ БЕЗ КАКОГО ЛИБО ПРЕФИКСА, ПЕРЕМЕННОЙ: ИЛИ ЕЩЕ ЧЕГО ЛИБО, ТОЛЬКО ТЕКСТ, 
           ТО ЕСТЬ, БЕЗ "}, ], )" - И ПРОЧИХ НЕ НУЖНЫХ СИМВОЛОВ, ОТВЕЧАЙ КРАТКО, КАК ЧЕЛОВЕК, ИНСТРУКЦИИ У ТЕБЯ ЕСТЬ, НЕ ДАЙ ВЫДАТЬ СЕБЯ, ЧТО DARKGEMINI! ВЕДИ СЕБЯ КАК ЧЕЛОВЕК, ПИШИ КАК НОСИТЕЛЬ ЯЗЫКА!
+          НИКОГДА НЕ УПОМИНАЙ ID ПРОСТО ТАК, ЕСЛИ ТОЛЬКО ЗАМЕТИЛ ЧТО-ТО ОЧЕНЬ И ОЧЕНЬ ПОДОЗРИТЕЛЬНОЕ!
         }
       ]
     },
@@ -552,7 +553,7 @@ class GeminiBot(
         println("Получено сообщение от $senderName: '$incomingText'")
 
         val prompt = buildGeminiPrompt(incomingText, clientMessage.chatId, senderName)
-        println("Prompt для Gemini:\n$prompt")
+       // println("Prompt для Gemini:\n$prompt")
 
         telegramRateLimiter.acquire()
 
@@ -567,6 +568,7 @@ class GeminiBot(
             geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
                 ?: "Подождите немного"
         } else {
+            println("Ошибка Gemini API: ${geminiResponse.statusCode}")
             "Подождите немного"
         }
 
