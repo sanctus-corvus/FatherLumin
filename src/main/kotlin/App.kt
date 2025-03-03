@@ -410,7 +410,7 @@ class GeminiBot(
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
 
-                if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
+                if (!isInActiveWindow(groupActiveHoursOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
