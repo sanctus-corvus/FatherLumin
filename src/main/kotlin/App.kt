@@ -353,7 +353,7 @@ class GeminiBot(
         val idahoZoneId = ZoneId.of("America/Boise")
         val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val groupWindows = listOf(
-            LocalTime.parse("00:00", formatter) to LocalTime.parse("00:00", formatter),
+            LocalTime.parse("00:00", formatter) to LocalTime.parse("01:00", formatter),
            // LocalTime.parse("12:00", formatter) to LocalTime.parse("14:00", formatter),
            // LocalTime.parse("18:00", formatter) to LocalTime.parse("19:00", formatter)
         )
@@ -427,7 +427,7 @@ class GeminiBot(
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
 
-                if (!isInActiveWindow(groupActiveHoursOffset)) {
+                if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
