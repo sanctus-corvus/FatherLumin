@@ -103,23 +103,39 @@ class GeminiBot(
         sessionDir: Path,
         telegramStorage: TelegramStorage<StorageKey, StorageValue>
     ) {
-        println("Останавливаю клиента и сохраняю сессию...")
+        println("Начинаю сохранение сессии...")
+
+        // Останавливаем TDLib-light клиента
         runBlocking {
             client?.closeAsync()?.await()
         }
-        client = null
+        println("TDLib-light клиент остановлен.")
+
+        // Архивируем текущую сессионную директорию
         val newZipData = zipDirectory(sessionDir)
         val newHash = newZipData.contentHashCode()
         val stored = telegramStorage[StorageKey.Session]
-        val storedHash = if (stored is StorageValue.SessionValue) stored.zipData.contentHashCode() else -1
+        val storedHash = if (stored is StorageValue.SessionValue) {
+            stored.zipData.contentHashCode()
+        } else {
+            -1
+        }
         if (newHash != storedHash) {
             telegramStorage[StorageKey.Session] = StorageValue.SessionValue(newZipData)
             println("Сессия обновлена в TelegramStorage.")
+            // Обновляем локальную сессию: очищаем sessionDir и распаковываем новый архив
+            sessionDir.toFile().deleteRecursively()
+            sessionDir.toFile().mkdirs()
+            unzipToDirectory(newZipData, sessionDir)
+            println("Локальная сессия обновлена из сохранённого архива.")
         } else {
             println("Сессия не изменилась – обновление не требуется.")
         }
-        println("Клиент остановлен и сессия сохранена.")
+
+        startTdlibClient()
+        println("Сохранение сессии завершено.")
     }
+
 
     private fun startTdlibClient() {
         println("Запускаю новый экземпляр TDLib-light клиента...")
@@ -320,7 +336,7 @@ class GeminiBot(
 
     // Определяет, находится ли текущее время в общем активном диапазоне
     private fun isGeneralActivePeriod(offset: Duration): Boolean {
-        val idahoZoneId = ZoneId.of("Asia/Almaty")
+        val idahoZoneId = ZoneId.of("America/Boise")
         val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
         val activeStart = LocalTime.of(8, 0).plus(offset)
         val activeEnd = LocalTime.of(21, 0).plus(offset)
