@@ -55,7 +55,7 @@ class GeminiBot(
     private var client: SimpleTelegramClient? = null
     private var botUserId: Long = 0L
 
-    private val telegramRateLimiter: RateLimiter = RateLimiter.create(2.0 / 60.0)
+    private val telegramRateLimiter: RateLimiter = RateLimiter.create(1.0 / 60.0)
 
     private val messageQueueMutex = Mutex()
 
@@ -82,7 +82,7 @@ class GeminiBot(
                     println("Неактивное время, клиент уже остановлен или сессия сохранена.")
                 }
             }
-            delay(Duration.ofHours(1).toMillis())
+            delay(Duration.ofMinutes(1).toMillis())
         }
     }
 
