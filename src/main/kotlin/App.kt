@@ -82,7 +82,7 @@ class GeminiBot(
                     println("Неактивное время, клиент уже остановлен или сессия сохранена.")
                 }
             }
-            delay(Duration.ofMinutes(1).toMillis())
+            delay(Duration.ofMinutes(30).toMillis())
         }
     }
 
