@@ -131,7 +131,6 @@ class GeminiBot(
             println("Сессия не изменилась – обновление не требуется.")
         }
 
-        startTdlibClient()
         println("Сохранение сессии завершено.")
     }
 
