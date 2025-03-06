@@ -395,6 +395,10 @@ class GeminiBot(
         }
     }
 
+    fun isMessageAlreadyProcessed(chatId: Long, messageDate: Int): Boolean {
+        val chatData = loadChatData(chatId)
+        return chatData.messages.any { it.timestamp.toIntOrNull() == messageDate }
+    }
     // иммитация чтения
     private suspend fun simulateReading(
         incomingText: String,
@@ -431,8 +435,7 @@ class GeminiBot(
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
-                if (message.date < botStartupTime) {
-                    println("Сообщение от ${message.date} проигнорировано")
+                if (message.date < botStartupTime && isMessageAlreadyProcessed(message.chatId, message.date)) {                    println("Сообщение от ${message.date} проигнорировано")
                     return@launch
                 }
 
