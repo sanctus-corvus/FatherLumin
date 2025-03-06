@@ -59,6 +59,8 @@ class GeminiBot(
 
     private val messageQueueMutex = Mutex()
 
+    val botStartupTime: Long = System.currentTimeMillis() / 1000
+
     fun autoUpdateSession(
         sessionDir: Path,
         telegramStorage: TelegramStorage<StorageKey, StorageValue>
@@ -429,6 +431,10 @@ class GeminiBot(
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
+                if (message.date < botStartupTime) {
+                    println("Сообщение от ${message.date} проигнорировано")
+                    return@launch
+                }
 
                 // Обрабатываем только разрешённые чаты
                 if (message.chatId !in config.allowedChatIds) return@launch
@@ -536,6 +542,28 @@ class GeminiBot(
         typingJob.cancelAndJoin()
     }
 
+    fun splitMessage(text: String, maxLen: Int = 4096): List<String> {
+        if (text.length <= maxLen) return listOf(text)
+        val parts = mutableListOf<String>()
+        var start = 0
+        while (start < text.length) {
+            var end = (start + maxLen).coerceAtMost(text.length)
+            // Если не достигли конца, то находим последнее место для разрыва (пробел или перевод строки)
+            if (end < text.length) {
+                val breakpoint = text.substring(start, end).lastIndexOfAny(charArrayOf(' ', '\n'))
+                if (breakpoint > 0) {
+                    end = start + breakpoint
+                }
+            }
+            parts.add(text.substring(start, end).trim())
+            start = end
+            while (start < text.length && text[start].isWhitespace()) {
+                start++
+            }
+        }
+        return parts
+    }
+
     private suspend fun processIncomingMessage(clientMessage: Message, incomingText: String) {
         val senderUserId = (clientMessage.senderId as MessageSenderUser).userId
         val senderName = try {
@@ -551,7 +579,6 @@ class GeminiBot(
         println("Получено сообщение от $senderName: '$incomingText'")
 
         val prompt = buildGeminiPrompt(incomingText, clientMessage.chatId, senderName)
-       // println("Prompt для Gemini:\n$prompt")
 
         telegramRateLimiter.acquire()
 
@@ -570,32 +597,61 @@ class GeminiBot(
             "Подождите немного"
         }
 
-        // Выполнение имитации печати – запускаем в отдельной корутине и ждем её завершения
+        // Имитация печати
         simulateTyping(
             clientMessage.chatId,
             if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
-            botResponseText, charactersPerSecond = 10.0
+            botResponseText, charactersPerSecond = 20.0
         )
 
-        // Отправка ответа
-        val formattedText = FormattedText(botResponseText, emptyArray())
-        val inputMsg = InputMessageText().apply { text = formattedText }
-        val sendReq = SendMessage().apply {
-            chatId = clientMessage.chatId
-            inputMessageContent = inputMsg
-            replyTo = InputMessageReplyToMessage().apply { messageId = clientMessage.id }
-            if (clientMessage.messageThreadId != 0L) {
-                messageThreadId = clientMessage.messageThreadId
+        // Если ответ слишком длинный, разбиваем его на части
+        val maxMessageLength = 4096
+        if (botResponseText.length > maxMessageLength) {
+            val parts = splitMessage(botResponseText, maxMessageLength)
+            println("Ответ разбит на ${parts.size} частей.")
+            for ((index, part) in parts.withIndex()) {
+                val textToSend = if (parts.size > 1) "(${index + 1}/${parts.size})\n$part" else part
+                val formattedText = FormattedText(textToSend, emptyArray())
+                val inputMsg = InputMessageText().apply { text = formattedText }
+                val sendReq = SendMessage().apply {
+                    chatId = clientMessage.chatId
+                    inputMessageContent = inputMsg
+                    if (index == 0) {
+                        replyTo = InputMessageReplyToMessage().apply { messageId = clientMessage.id }
+                    }
+                    if (clientMessage.messageThreadId != 0L) {
+                        messageThreadId = clientMessage.messageThreadId
+                    }
+                }
+                try {
+                    client?.sendMessage(sendReq, true)?.await()
+                    println("Отправлена часть ${index + 1} из ${parts.size}")
+                    delay(1000L)
+                } catch (e: Exception) {
+                    println("Ошибка отправки части ${index + 1}: ${e.message}")
+                }
+            }
+        } else {
+            val formattedText = FormattedText(botResponseText, emptyArray())
+            val inputMsg = InputMessageText().apply { text = formattedText }
+            val sendReq = SendMessage().apply {
+                chatId = clientMessage.chatId
+                inputMessageContent = inputMsg
+                replyTo = InputMessageReplyToMessage().apply { messageId = clientMessage.id }
+                if (clientMessage.messageThreadId != 0L) {
+                    messageThreadId = clientMessage.messageThreadId
+                }
+            }
+            try {
+                telegramRateLimiter.acquire()
+                client?.sendMessage(sendReq, true)?.await()
+                println("Ответ отправлен")
+            } catch (e: Exception) {
+                println("Ошибка отправки: ${e.message}")
             }
         }
-        try {
-            telegramRateLimiter.acquire()
-            client?.sendMessage(sendReq, true)?.await()
-            println("Ответ отправлен")
-            addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
-        } catch (e: Exception) {
-            println("Ошибка отправки: ${e.message}")
-        }
+
+        addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
     }
 
 
