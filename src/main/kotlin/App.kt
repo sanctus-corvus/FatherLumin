@@ -426,7 +426,7 @@ class GeminiBot(
         builder.addUpdateHandler(UpdateNewMessage::class.java) { update ->
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
-                println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
+                //println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
                 if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
@@ -439,7 +439,7 @@ class GeminiBot(
 */
 
                 // Обрабатываем только разрешённые чаты
-                if (message.chatId !in config.allowedChatIds) return@launch
+                if (!isAllowedChat(message.chatId)) return@launch
                 // Не обрабатываем сообщения, отправленные самим ботом
                 if (message.senderId is MessageSenderUser &&
                     (message.senderId as MessageSenderUser).userId == botUserId) return@launch
@@ -679,5 +679,9 @@ class GeminiBot(
                 println("Ошибка при получении списка чатов.")
             }
         }
+    }
+    fun isAllowedChat(chatId: Long): Boolean {
+        val allowed = config.allowedChatIds
+        return chatId in allowed || (chatId.toString().endsWith(allowed.firstOrNull()?.toString() ?: "") && chatId.toString().startsWith("-100"))
     }
 }
