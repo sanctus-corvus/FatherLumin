@@ -421,7 +421,7 @@ class GeminiBot(
         sleepPeriodOffset = generateRandomTimeOffset("Sleep Period")
 
         scheduleDailyOffsetUpdate()
-
+        listChatIds()
         // Обработчик
         builder.addUpdateHandler(UpdateNewMessage::class.java) { update ->
             CoroutineScope(Dispatchers.IO).launch {
