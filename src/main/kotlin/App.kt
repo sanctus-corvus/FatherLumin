@@ -426,7 +426,7 @@ class GeminiBot(
         builder.addUpdateHandler(UpdateNewMessage::class.java) { update ->
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
-
+                println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
                 if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
