@@ -380,7 +380,7 @@ class GeminiBot(
                 sleepPeriodOffset = generateRandomTimeOffset("Sleep Period")
             }
             while (true) {
-                val idahoZoneId = ZoneId.of("America/Boise")
+                val idahoZoneId = ZoneId.of("Asia/Almaty")
                 val now = ZonedDateTime.now(idahoZoneId)
                 val nextMidnight = now.toLocalDate().plusDays(1).atStartOfDay(idahoZoneId)
                 val delayMillis = Duration.between(now, nextMidnight).toMillis()
