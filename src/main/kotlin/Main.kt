@@ -66,6 +66,7 @@ fun main() {
     val chatBot = GeminiBot(BotConfig, geminiClient, telegramStorage)
 
     chatBot.start()
+    chatBot.listChatIds()
     chatBot.autoUpdateSession(sessionDir, telegramStorage)
 
 
