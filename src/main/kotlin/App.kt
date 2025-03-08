@@ -431,10 +431,12 @@ class GeminiBot(
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
+/*
                 if (message.date < botStartupTime) {
                     println("Сообщение от ${message.date} проигнорировано")
                     return@launch
                 }
+*/
 
                 // Обрабатываем только разрешённые чаты
                 if (message.chatId !in config.allowedChatIds) return@launch
