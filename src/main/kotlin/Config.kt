@@ -14,7 +14,7 @@ object BotConfig {
     val telegramBotToken: String = localEnv["TOKEN"]
         ?: System.getenv("TOKEN") ?: "TOKEN не найден"
 
-    val configKeys = listOf("GEMINI_API_KEY", "API_ID", "API_HASH", "PHONE", "GROUP_ID")
+    val configKeys = listOf("GEMINI_API_KEY", "API_ID", "API_HASH", "PHONE", "GROUP_ID", "ALLOWED_CHAT_IDS")
 
     val config: MutableMap<String, String> = mutableMapOf()
 
@@ -35,7 +35,9 @@ object BotConfig {
         get() = config["GROUP_ID"]
 
     val allowedChatIds: Set<Long>
-        get() = groupId?.toLongOrNull()?.let { setOf(it) } ?: emptySet()
+        get() = config["ALLOWED_CHAT_IDS"]?.split(",")
+            ?.mapNotNull { it.trim().toLongOrNull() }
+            ?.toSet() ?: groupId?.toLongOrNull()?.let { setOf(it) } ?: emptySet()
 
     const val botCreator = "Sanctus Corvus"
     const val botName = "Люмин" // Имя бота, на которое он реагирует
