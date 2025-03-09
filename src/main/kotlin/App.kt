@@ -427,6 +427,7 @@ class GeminiBot(
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
                 println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
+
                 if (message.content is MessageText) {
                     val text = (message.content as MessageText).text.text
                     if (message.chatId > 0 && text.startsWith("/secret_command", ignoreCase = true)) {
