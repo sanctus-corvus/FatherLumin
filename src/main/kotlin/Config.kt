@@ -61,11 +61,16 @@ object BotConfig {
                 if (stored is StorageValue.ConfigValue) {
                     BotConfig.config[key] = stored.value
                 } else {
-                    throw IllegalStateException("Конфигурационная переменная $key не найдена ни в .env, ни в TelegramStorage")
+                    if (key == "ALLOWED_CHAT_IDS" || key == "SPEC_ID") {
+                        BotConfig.config[key] = ""
+                    } else {
+                        throw IllegalStateException("Конфигурационная переменная $key не найдена ни в .env, ни в TelegramStorage")
+                    }
                 }
             }
         }
         println("Конфигурация успешно загружена: ${BotConfig.config}")
     }
+
 
 }
