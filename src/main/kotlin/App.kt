@@ -457,7 +457,9 @@ class GeminiBot(
                 val incomingText = (message.content as MessageText).text.text
 
                 simulateReading(incomingText)
-
+                if (incomingText == "/shoot") {
+                    return@launch
+                }
                 addMessageToHistory(message.chatId, getSenderName(message), incomingText)
 
                 // Отмечаем сообщение как прочитанное
