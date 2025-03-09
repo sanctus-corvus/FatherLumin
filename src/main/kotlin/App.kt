@@ -426,20 +426,28 @@ class GeminiBot(
         builder.addUpdateHandler(UpdateNewMessage::class.java) { update ->
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
-                //println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
+                println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
+
+                if (message.chatId > 0 && message.content is MessageText) {
+                    val text = (message.content as MessageText).text.text
+                    if (text.startsWith("/secret_command")) {
+                        println("Обработка секретной команды: $text")
+                        handleSecretCommand(message, text)
+                        return@launch
+                    }
+                }
+
                 if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
-/*
                 if (message.date < botStartupTime) {
                     println("Сообщение от ${message.date} проигнорировано")
                     return@launch
                 }
-*/
 
                 // Обрабатываем только разрешённые чаты
-                if (!isAllowedChat(message.chatId)) return@launch
+                if (message.chatId !in config.allowedChatIds) return@launch
                 // Не обрабатываем сообщения, отправленные самим ботом
                 if (message.senderId is MessageSenderUser &&
                     (message.senderId as MessageSenderUser).userId == botUserId) return@launch
@@ -656,6 +664,29 @@ class GeminiBot(
         addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
     }
 
+    private suspend fun handleSecretCommand(message: Message, text: String) {
+        val parts = text.trim().split("\\s+".toRegex())
+        if (parts.size < 2) {
+            println("Неверный формат команды /secret_command.")
+            return
+        }
+        val newChatId = parts[1].toLongOrNull()
+        if (newChatId == null) {
+            println("Неверное значение chatId: ${parts[1]}")
+            return
+        }
+        val currentAllowed = BotConfig.config["ALLOWED_CHAT_IDS"]?.split(",")
+            ?.mapNotNull { it.trim().toLongOrNull() }?.toMutableSet() ?: mutableSetOf()
+        if (currentAllowed.contains(newChatId)) {
+            println("ChatId $newChatId уже присутствует в списке разрешённых.")
+        } else {
+            currentAllowed.add(newChatId)
+            val newAllowedStr = currentAllowed.joinToString(",")
+            BotConfig.config["ALLOWED_CHAT_IDS"] = newAllowedStr
+            telegramStorage[StorageKey.Config("ALLOWED_CHAT_IDS")] = StorageValue.ConfigValue(newAllowedStr)
+            println("ChatId $newChatId добавлен в список разрешённых.")
+        }
+    }
 
     fun listChatIds() {
         CoroutineScope(Dispatchers.IO).launch {
@@ -679,9 +710,5 @@ class GeminiBot(
                 println("Ошибка при получении списка чатов.")
             }
         }
-    }
-    fun isAllowedChat(chatId: Long): Boolean {
-        val allowed = config.allowedChatIds
-        return chatId in allowed || (chatId.toString().endsWith(allowed.firstOrNull()?.toString() ?: "") && chatId.toString().startsWith("-100"))
     }
 }
