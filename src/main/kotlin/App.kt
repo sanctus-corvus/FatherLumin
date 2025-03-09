@@ -687,7 +687,6 @@ class GeminiBot(
         }
         val parts = text.trim().split("\\s+".toRegex())
         if (parts.size == 2) {
-            // Если команда состоит из двух частей, трактуем вторую как новый chatId
             val newChatId = parts[1].toLongOrNull()
             if (newChatId == null) {
                 println("Неверное значение chatId: ${parts[1]}")
