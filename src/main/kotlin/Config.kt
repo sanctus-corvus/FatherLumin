@@ -14,7 +14,7 @@ object BotConfig {
     val telegramBotToken: String = localEnv["TOKEN"]
         ?: System.getenv("TOKEN") ?: "TOKEN не найден"
 
-    val configKeys = listOf("GEMINI_API_KEY", "API_ID", "API_HASH", "PHONE", "GROUP_ID", "ALLOWED_CHAT_IDS")
+    val configKeys = listOf("GEMINI_API_KEY", "API_ID", "API_HASH", "PHONE", "GROUP_ID", "ALLOWED_CHAT_IDS", "SPEC_ID")
 
     val config: MutableMap<String, String> = mutableMapOf()
 
@@ -30,6 +30,9 @@ object BotConfig {
 
     val phone: String
         get() = config["PHONE"] ?: "PHONE не найден в конфигурации"
+
+    val specId: Long?
+        get() = config["SPEC_ID"]?.toLongOrNull()
 
     val groupId: String?
         get() = config["GROUP_ID"]
