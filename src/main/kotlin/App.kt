@@ -608,13 +608,11 @@ class GeminiBot(
         }
 
         // Имитация печати
-        runBlocking {
-            simulateTyping(
-                clientMessage.chatId,
-                if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
-                botResponseText, charactersPerSecond = 20.0
-            )
-        }
+        simulateTyping(
+            clientMessage.chatId,
+            if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
+            botResponseText, charactersPerSecond = 20.0
+        )
 
         // Если ответ слишком длинный, разбиваем его на части
         val maxMessageLength = 4096
