@@ -608,11 +608,13 @@ class GeminiBot(
         }
 
         // Имитация печати
-        simulateTyping(
-            clientMessage.chatId,
-            if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
-            botResponseText, charactersPerSecond = 20.0
-        )
+        runBlocking {
+            simulateTyping(
+                clientMessage.chatId,
+                if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
+                botResponseText, charactersPerSecond = 20.0
+            )
+        }
 
         // Если ответ слишком длинный, разбиваем его на части
         val maxMessageLength = 4096
@@ -682,7 +684,7 @@ class GeminiBot(
         }
 
         if (senderUserId != BotConfig.specId) {
-            println("Отказ: секретные команды доступны только владельцу с SPEC_ID = ${BotConfig.specId}, а ваш = $senderUserId")
+            println("Отказ: ID питуха = $senderUserId")
             return
         }
         val parts = text.trim().split("\\s+".toRegex())
