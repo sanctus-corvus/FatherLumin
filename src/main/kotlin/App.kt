@@ -669,7 +669,7 @@ class GeminiBot(
             println("Не удалось определить id отправителя секретной команды")
             return
         }
-/*        if (BotConfig.specId == null) {
+        if (BotConfig.specId == null) {
             if (text.trim().equals("/secret_command set_spec_id", ignoreCase = true)) {
                 BotConfig.config["SPEC_ID"] = senderUserId.toString()
                 telegramStorage[StorageKey.Config("SPEC_ID")] = StorageValue.ConfigValue(senderUserId.toString())
@@ -678,44 +678,37 @@ class GeminiBot(
                 println("Сначала установите SPEC_ID")
             }
             return
-        }*/
+        }
 
         if (senderUserId != BotConfig.specId) {
             println("Отказ: секретные команды доступны только владельцу с SPEC_ID = ${BotConfig.specId}, а ваш = $senderUserId")
             return
         }
         val parts = text.trim().split("\\s+".toRegex())
-        if (parts.size == 2) {
-            val newChatId = parts[1].toLongOrNull()
-            if (newChatId == null) {
-                println("Неверное значение chatId: ${parts[1]}")
-                return
-            }
-            addAllowedChatId(newChatId)
-        } else if (parts.size >= 3 && parts[1].equals("add", ignoreCase = true)) {
+        if (parts.size < 2) {
+            println("Неверный формат команды")
+            return
+        }
+        if (parts[1].equals("add", ignoreCase = true) && parts.size >= 3) {
             val newChatId = parts[2].toLongOrNull()
             if (newChatId == null) {
                 println("Неверное значение chatId: ${parts[2]}")
                 return
             }
-            addAllowedChatId(newChatId)
+            val currentAllowed = BotConfig.config["ALLOWED_CHAT_IDS"]?.split(",")
+                ?.mapNotNull { it.trim().toLongOrNull() }
+                ?.toMutableSet() ?: mutableSetOf()
+            if (currentAllowed.contains(newChatId)) {
+                println("ChatId $newChatId уже присутствует в списке разрешённых")
+            } else {
+                currentAllowed.add(newChatId)
+                val newAllowedStr = currentAllowed.joinToString(",")
+                BotConfig.config["ALLOWED_CHAT_IDS"] = newAllowedStr
+                telegramStorage[StorageKey.Config("ALLOWED_CHAT_IDS")] = StorageValue.ConfigValue(newAllowedStr)
+                println("ChatId $newChatId добавлен в список разрешённых")
+            }
         } else {
             println("Неизвестная подкоманда")
-        }
-    }
-
-    private suspend fun addAllowedChatId(newChatId: Long) {
-        val currentAllowed = BotConfig.config["ALLOWED_CHAT_IDS"]?.split(",")
-            ?.mapNotNull { it.trim().toLongOrNull() }
-            ?.toMutableSet() ?: mutableSetOf()
-        if (currentAllowed.contains(newChatId)) {
-            println("ChatId $newChatId уже присутствует в списке разрешённых")
-        } else {
-            currentAllowed.add(newChatId)
-            val newAllowedStr = currentAllowed.joinToString(",")
-            BotConfig.config["ALLOWED_CHAT_IDS"] = newAllowedStr
-            telegramStorage[StorageKey.Config("ALLOWED_CHAT_IDS")] = StorageValue.ConfigValue(newAllowedStr)
-            println("ChatId $newChatId добавлен в список разрешённых")
         }
     }
 
