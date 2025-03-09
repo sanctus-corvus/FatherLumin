@@ -428,6 +428,7 @@ class GeminiBot(
                 val message = update.message
                 println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
 
+/*
                 if (message.chatId > 0 && message.content is MessageText) {
                     val text = (message.content as MessageText).text.text
                     if (text.startsWith("/secret_command")) {
@@ -436,6 +437,7 @@ class GeminiBot(
                         return@launch
                     }
                 }
+*/
 
                 if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
