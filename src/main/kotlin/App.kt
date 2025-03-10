@@ -441,7 +441,7 @@ class GeminiBot(
                     }
                 }
 
-                if (!isGeneralActivePeriod(groupActiveHoursOffset)) {
+                if (!isGeneralActivePeriod(generalActiveTimeOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
                     return@launch
                 }
