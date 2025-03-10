@@ -83,7 +83,7 @@ class GeminiBot(
                     println("Неактивное время, клиент уже остановлен или сессия сохранена.")
                 }
             }
-            delay(Duration.ofMinutes(1).toMillis())
+            delay(Duration.ofMinutes(10).toMillis())
         }
     }
 
@@ -110,6 +110,7 @@ class GeminiBot(
         runBlocking {
             client?.closeAsync()?.await()
         }
+        client = null
         println("TDLib-light клиент остановлен.")
 
         // Архивируем текущую сессионную директорию
@@ -345,7 +346,7 @@ class GeminiBot(
         val currentTime = ZonedDateTime.now(zoneId).toLocalTime()
         val activeStart = LocalTime.of(8, 0).plus(offset)
         val activeEnd = LocalTime.of(21, 0).plus(offset)
-        println("Текущее время: $currentTime, активное окно: $activeStart - $activeEnd")
+        //println("Текущее время: $currentTime, активное окно: $activeStart - $activeEnd")
         return if (activeStart.isBefore(activeEnd)) {
             currentTime.isAfter(activeStart) && currentTime.isBefore(activeEnd)
         } else {
