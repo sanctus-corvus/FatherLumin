@@ -341,10 +341,11 @@ class GeminiBot(
 
     // Определяет, находится ли текущее время в общем активном диапазоне
     private fun isGeneralActivePeriod(offset: Duration): Boolean {
-        val idahoZoneId = ZoneId.of("Asia/Almaty")
-        val currentTime = ZonedDateTime.now(idahoZoneId).toLocalTime()
+        val zoneId = ZoneId.of("Asia/Almaty")
+        val currentTime = ZonedDateTime.now(zoneId).toLocalTime()
         val activeStart = LocalTime.of(8, 0).plus(offset)
         val activeEnd = LocalTime.of(21, 0).plus(offset)
+        println("Текущее время: $currentTime, активное окно: $activeStart - $activeEnd")
         return if (activeStart.isBefore(activeEnd)) {
             currentTime.isAfter(activeStart) && currentTime.isBefore(activeEnd)
         } else {
@@ -432,6 +433,10 @@ class GeminiBot(
                 val message = update.message
                 println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
 
+                if (message.date < botStartupTime) {
+                    println("Сообщение от ${message.date} проигнорировано")
+                    return@launch
+                }
                 if (message.content is MessageText) {
                     val text = (message.content as MessageText).text.text
                     if (message.chatId > 0 && text.startsWith("/secret_command", ignoreCase = true)) {
@@ -447,10 +452,6 @@ class GeminiBot(
 
                 if (!isGeneralActivePeriod(generalActiveTimeOffset)) {
                     println("Сообщение получено, но сейчас не разрешенное окно для обработки.")
-                    return@launch
-                }
-                if (message.date < botStartupTime) {
-                    println("Сообщение от ${message.date} проигнорировано")
                     return@launch
                 }
 
