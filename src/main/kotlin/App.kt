@@ -59,7 +59,7 @@ class GeminiBot(
 
     private val messageQueueMutex = Mutex()
 
-    val botStartupTime: Long = System.currentTimeMillis() / 1000
+    private var botStartupTime: Long = System.currentTimeMillis() / 1000
 
     fun autoUpdateSession(
         sessionDir: Path,
@@ -438,7 +438,11 @@ class GeminiBot(
                         println("Обработка секретной команды: $text")
                         handleSecretCommand(message, text)
                         return@launch
+                    } else if (message.chatId > 0 && text.startsWith("/save_session")) {
+                        handleUpdateSessionCommand(message, text)
+                        return@launch
                     }
+
                 }
 
                 if (!isGeneralActivePeriod(generalActiveTimeOffset)) {
@@ -724,6 +728,18 @@ class GeminiBot(
             println("ChatId $newChatId добавлен в список разрешённых")
         }
     }
+    private suspend fun handleUpdateSessionCommand(message: Message, text: String) {
+        val senderUserId = (message.senderId as? MessageSenderUser)?.userId
+        if (senderUserId == null || senderUserId != BotConfig.specId) {
+            println("Отказ: секретные команды доступны только владельцу")
+            return
+        }
+        println("Обновление сессии по секретной команде...")
+        saveSession(Paths.get("test-session"), telegramStorage)
+        botStartupTime = System.currentTimeMillis() / 1000
+        println("Сессия обновлена, botStartupTime сброшен.")
+    }
+
     fun listChatIds() {
         CoroutineScope(Dispatchers.IO).launch {
             val getChatsRequest = GetChats(ChatListMain(), 100)
