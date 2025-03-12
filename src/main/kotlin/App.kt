@@ -422,10 +422,6 @@ class GeminiBot(
         val authSupplier = AuthenticationSupplier.user(config.phone)
         val builder = clientFactory.builder(settings)
 
-        generalActiveTimeOffset = generateRandomTimeOffset("General Active Time")
-        groupActiveHoursOffset = generateRandomTimeOffset("Group Active Hours")
-        sleepPeriodOffset = generateRandomTimeOffset("Sleep Period")
-
         scheduleDailyOffsetUpdate()
 
         // Обработчик
@@ -585,6 +581,33 @@ class GeminiBot(
         }
         return parts
     }
+    private suspend fun sendResponseMessage(
+        chatId: Long,
+        messageThreadId: Long?,
+        replyMessageId: Long,
+        texts: String,
+        useRateLimiter: Boolean = true
+    ) {
+        val formattedText = FormattedText(texts, emptyArray())
+        val inputMsg = InputMessageText().apply { text = formattedText }
+        val sendReq = SendMessage().apply {
+            this.chatId = chatId
+            inputMessageContent = inputMsg
+            replyTo = InputMessageReplyToMessage().apply { messageId = replyMessageId }
+            if (messageThreadId != null && messageThreadId != 0L) {
+                this.messageThreadId = messageThreadId
+            }
+        }
+        if (useRateLimiter) {
+            telegramRateLimiter.acquire()
+        }
+        try {
+            client?.sendMessage(sendReq, true)?.await()
+            println("Сообщение отправлено")
+        } catch (e: Exception) {
+            println("Ошибка отправки: ${e.message}")
+        }
+    }
 
     private suspend fun processIncomingMessage(clientMessage: Message, incomingText: String) {
         val senderUserId = (clientMessage.senderId as MessageSenderUser).userId
@@ -619,6 +642,18 @@ class GeminiBot(
             "Подождите немного"
         }
 
+        if (botResponseText.trim() == "/shoot()") {
+            sendResponseMessage(
+                chatId = clientMessage.chatId,
+                messageThreadId = if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
+                replyMessageId = clientMessage.id,
+                texts = "/shoot()",
+                useRateLimiter = false
+            )
+            addMessageToHistory(clientMessage.chatId, config.botName, "/shoot()")
+            return
+        }
+
         // Имитация печати
         simulateTyping(
             clientMessage.chatId,
@@ -632,45 +667,25 @@ class GeminiBot(
             val parts = splitMessage(botResponseText, maxMessageLength)
             println("Ответ разбит на ${parts.size} частей.")
             for ((index, part) in parts.withIndex()) {
-                val textToSend = if (parts.size > 1) "(${index + 1}/${parts.size})\n$part" else part
-                val formattedText = FormattedText(textToSend, emptyArray())
-                val inputMsg = InputMessageText().apply { text = formattedText }
-                val sendReq = SendMessage().apply {
-                    chatId = clientMessage.chatId
-                    inputMessageContent = inputMsg
-                    if (index == 0) {
-                        replyTo = InputMessageReplyToMessage().apply { messageId = clientMessage.id }
-                    }
-                    if (clientMessage.messageThreadId != 0L) {
-                        messageThreadId = clientMessage.messageThreadId
-                    }
-                }
-                try {
-                    client?.sendMessage(sendReq, true)?.await()
-                    println("Отправлена часть ${index + 1} из ${parts.size}")
-                    delay(1000L)
-                } catch (e: Exception) {
-                    println("Ошибка отправки части ${index + 1}: ${e.message}")
-                }
+                val textToSend = if (parts.size > 1) part else part
+                sendResponseMessage(
+                    chatId = clientMessage.chatId,
+                    messageThreadId = if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
+                    replyMessageId = if (index == 0) clientMessage.id else clientMessage.id, // reply только для первой части
+                    texts = textToSend,
+                    useRateLimiter = true
+                )
+                println("Отправлена часть ${index + 1} из ${parts.size}")
+                delay(1000L)
             }
         } else {
-            val formattedText = FormattedText(botResponseText, emptyArray())
-            val inputMsg = InputMessageText().apply { text = formattedText }
-            val sendReq = SendMessage().apply {
-                chatId = clientMessage.chatId
-                inputMessageContent = inputMsg
-                replyTo = InputMessageReplyToMessage().apply { messageId = clientMessage.id }
-                if (clientMessage.messageThreadId != 0L) {
-                    messageThreadId = clientMessage.messageThreadId
-                }
-            }
-            try {
-                telegramRateLimiter.acquire()
-                client?.sendMessage(sendReq, true)?.await()
-                println("Ответ отправлен")
-            } catch (e: Exception) {
-                println("Ошибка отправки: ${e.message}")
-            }
+            sendResponseMessage(
+                chatId = clientMessage.chatId,
+                messageThreadId = if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
+                replyMessageId = clientMessage.id,
+                texts = botResponseText,
+                useRateLimiter = true
+            )
         }
 
         addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
