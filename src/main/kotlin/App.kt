@@ -463,9 +463,6 @@ class GeminiBot(
                 val incomingText = (message.content as MessageText).text.text
 
                 simulateReading(incomingText)
-                if (incomingText == "/shoot@glockkobot") {
-                    return@launch
-                }
                 addMessageToHistory(message.chatId, getSenderName(message), incomingText)
 
                 // Отмечаем сообщение как прочитанное
@@ -475,6 +472,16 @@ class GeminiBot(
                     forceRead = true
                 }
                 client?.send(viewMessagesRequest)
+
+                // Игнор команд Glock
+                val isReplyToBot = message.replyTo is MessageReplyToMessage &&
+                        (message.replyTo as MessageReplyToMessage).messageId == message.id
+                val isShootCommand = incomingText == "/shoot@glockkobot" || incomingText == "/shoot"
+
+                if (!isReplyToBot && isShootCommand) {
+                    println("Игнорируем команду '/shoot' от пользователя (не reply боту).")
+                    return@launch
+                }
 
                 // Если сообщение является reply, проверяем, что исходное сообщение отправлено ботом
                 if (message.replyTo != null) {
@@ -621,7 +628,7 @@ class GeminiBot(
             println("Ошибка GetUser: ${e.message}. Используем userId как имя.")
             senderUserId.toString()
         }
-        println("Получено сообщение от $senderName: '$incomingText'")
+        //println("Получено сообщение от $senderName: '$incomingText'")
 
         val prompt = buildGeminiPrompt(incomingText, clientMessage.chatId, senderName)
 
@@ -636,21 +643,21 @@ class GeminiBot(
 
         val botResponseText = if (geminiResponse.statusCode in 200..299) {
             geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-                ?: "Подождите немного"
+                ?: "Сейчас время молитвы нет времени на вас"
         } else {
             println("Ошибка Gemini API: ${geminiResponse.statusCode}")
-            "Подождите немного"
+            "Подожди, надо помолится"
         }
 
-        if (botResponseText.trim() == "/shoot()") {
+        if (botResponseText.trim() == "/shoot") {
             sendResponseMessage(
                 chatId = clientMessage.chatId,
                 messageThreadId = if (clientMessage.messageThreadId != 0L) clientMessage.messageThreadId else null,
                 replyMessageId = clientMessage.id,
-                texts = "/shoot()",
+                texts = "/shoot",
                 useRateLimiter = false
             )
-            addMessageToHistory(clientMessage.chatId, config.botName, "/shoot()")
+            addMessageToHistory(clientMessage.chatId, config.botName, "/shoot")
             return
         }
 
