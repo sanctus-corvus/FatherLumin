@@ -53,7 +53,7 @@ fun main() {
     val geminiClient = GeminiClient(
         GeminiClient.Configuration.create(
             apiKey = BotConfig.geminiApiKey,
-            modelName = GeminiClient.GeminiModel.GEMINI_20FLASH_PRO,
+            modelName = GeminiClient.GeminiModel.GEMINI_20FLASH_EXP,
             safetySettingsBuilder = {
                 blockNone(SafetyCategory.HARM_CATEGORY_HATE_SPEECH)
                 blockNone(SafetyCategory.HARM_CATEGORY_HARASSMENT)
@@ -66,7 +66,7 @@ fun main() {
     val chatBot = GeminiBot(BotConfig, geminiClient, telegramStorage)
 
     chatBot.start()
-    chatBot.listChatIds()
+    //chatBot.listChatIds()
     chatBot.autoUpdateSession(sessionDir, telegramStorage)
 
 

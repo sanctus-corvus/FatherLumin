@@ -401,6 +401,10 @@ class GeminiBot(
         }
     }
 
+    private fun checkActive(): Boolean {
+        return isGeneralActivePeriod(generalActiveTimeOffset)
+    }
+
     // иммитация чтения
     private suspend fun simulateReading(
         incomingText: String,
@@ -412,6 +416,7 @@ class GeminiBot(
 
         delay(delayMillis)
     }
+
     fun start() {
         val clientFactory = SimpleTelegramClientFactory()
         val apiToken = APIToken(config.apiId.toInt(), config.apiHash)
@@ -487,10 +492,12 @@ class GeminiBot(
                 if (message.replyTo != null) {
                     val replyToMessageId = (message.replyTo as MessageReplyToMessage).messageId
                     try {
-                        val repliedMessage = client?.send(GetMessage().apply {
-                            chatId = message.chatId
-                            messageId = replyToMessageId
-                        })?.get(50, TimeUnit.MILLISECONDS)
+                        val repliedMessage = retryOperation {
+                            client?.send(GetMessage().apply {
+                                chatId = message.chatId
+                                messageId = replyToMessageId
+                            })?.get(50, TimeUnit.MILLISECONDS)
+                        }
                         // Если исходное сообщение найдено и его отправитель – бот, обрабатываем сообщение
                         if (repliedMessage != null &&
                             repliedMessage.senderId is MessageSenderUser &&
@@ -609,7 +616,9 @@ class GeminiBot(
             telegramRateLimiter.acquire()
         }
         try {
-            client?.sendMessage(sendReq, true)?.await()
+            retryOperation {
+                client?.sendMessage(sendReq, true)?.await() ?: throw Exception("Null")
+            }
             println("Сообщение отправлено")
         } catch (e: Exception) {
             println("Ошибка отправки: ${e.message}")
@@ -635,7 +644,7 @@ class GeminiBot(
         telegramRateLimiter.acquire()
 
         val geminiResponse = try {
-            geminiClient.generateContent(prompt)
+            retryOperation { geminiClient.generateContent(prompt) }
         } catch (e: Exception) {
             println("Ошибка Gemini: ${e.message}")
             return
@@ -658,6 +667,11 @@ class GeminiBot(
                 useRateLimiter = false
             )
             addMessageToHistory(clientMessage.chatId, config.botName, "/shoot")
+            return
+        }
+
+        if (!checkActive()) {
+            println("Активное время закончилось – отправка ответа отменена")
             return
         }
 
@@ -696,6 +710,25 @@ class GeminiBot(
         }
 
         addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
+    }
+    private suspend fun <T> retryOperation(
+        times: Int = 3,
+        initialDelay: Long = 1000,
+        maxDelay: Long = 10000,
+        factor: Double = 2.0,
+        block: suspend () -> T
+    ): T {
+        var currentDelay = initialDelay
+        repeat(times - 1) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                println("Операция не удалась: ${e.message}. Повтор через $currentDelay мс.")
+            }
+            delay(currentDelay)
+            currentDelay = (currentDelay * factor).toLong().coerceAtMost(maxDelay)
+        }
+        return block() // последняя попытка
     }
 
     private suspend fun handleSecretCommand(message: Message, text: String) {

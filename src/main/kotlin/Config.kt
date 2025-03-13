@@ -45,7 +45,7 @@ object BotConfig {
     const val botCreator = "Sanctus Corvus"
     const val botName = "Люмин" // Имя бота, на которое он реагирует
     var botNamePrefix = botName.lowercase()
-    const val historySize = 85*2
+    const val historySize = 120
     fun bootstrapConfig(telegramStorage: TelegramStorage<StorageKey, StorageValue>) {
         val localEnv = dotenv {
             ignoreIfMissing = true
