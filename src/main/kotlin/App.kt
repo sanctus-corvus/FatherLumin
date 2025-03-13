@@ -428,12 +428,12 @@ class GeminiBot(
         builder.addUpdateHandler(UpdateNewMessage::class.java) { update ->
             CoroutineScope(Dispatchers.IO).launch {
                 val message = update.message
-                println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
+/*                println("Получено сообщение: ${message.date}. botStartupTime = $botStartupTime")
 
                 if (message.date < botStartupTime) {
                     println("Сообщение от ${message.date} проигнорировано")
                     return@launch
-                }
+                }*/
                 if (message.content is MessageText) {
                     val text = (message.content as MessageText).text.text
                     if (message.chatId > 0 && text.startsWith("/secret_command", ignoreCase = true)) {
