@@ -604,10 +604,15 @@ class GeminiBot(
                 }
 
                 val rawResponse = geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() ?: "No response body"
-                println("Raw Gemini API Response Body: $rawResponse")
+                var jsonResponse = rawResponse
+                if (rawResponse.startsWith("```json") && rawResponse.endsWith("```")) {
+                    jsonResponse = rawResponse.substringAfter("```json").substringBeforeLast("```").trim()
+                } else if (rawResponse.startsWith("```") && rawResponse.endsWith("```")) {
+                    jsonResponse = rawResponse.substringAfter("```").substringBeforeLast("```").trim()
+                }
 
-                //val jsonResponse = geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull() ?: ""
-                val analysisResult = parseAnalysisResult(rawResponse.toString())
+
+                val analysisResult = parseAnalysisResult(jsonResponse)
                 if (!checkActive()) {
                     println("Активное время закончилось – отправка ответа отменена")
                     return@launch
