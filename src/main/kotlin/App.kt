@@ -173,8 +173,7 @@ class GeminiBot(
 
         val historyText = chatData.messages.joinToString(separator = "\n") { msg ->
             // Если сообщение является reply, добавляем информацию о том, на какое сообщение отвечали
-            val replyInfo = if (msg.timestamp.contains("replied to")) "" else ""
-            "[${msg.timestamp}] @${msg.userName}$replyInfo: ${msg.text}"
+            "${getSenderName((msg as Message))}: ${msg.text}"
         }
         val lastMessages = chatData.messages.takeLast(10) // На случай ограничения
         
@@ -603,7 +602,11 @@ class GeminiBot(
                     return@launch
                 }
 
-                val jsonResponse = geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull() ?: ""
+                val rawResponse = geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() ?: "No response body"
+                println("Raw Gemini API Response Body: $rawResponse")
+
+                val jsonResponse = rawResponse
+                //val jsonResponse = geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull() ?: ""
                 val analysisResult = parseAnalysisResult(jsonResponse.toString())
                 if (!checkActive()) {
                     println("Активное время закончилось – отправка ответа отменена")
