@@ -1,4 +1,5 @@
 import com.github.demidko.telegram.TelegramStorage
+import com.github.sanctuscorvus.GeminiClient
 import io.github.cdimascio.dotenv.dotenv
 import it.tdlight.client.APIToken
 import it.tdlight.client.SimpleTelegramClientFactory
@@ -46,6 +47,9 @@ object BotConfig {
     const val botName = "Люмин" // Имя бота, на которое он реагирует
     var botNamePrefix = botName.lowercase()
     const val historySize = 120
+
+    val defaultGeminiModel = GeminiClient.GeminiModel.GEMINI_20FLASH_PRO
+    val fallbackGeminiModel = GeminiClient.GeminiModel.GEMINI_20FLASH_EXP
     fun bootstrapConfig(telegramStorage: TelegramStorage<StorageKey, StorageValue>) {
         val localEnv = dotenv {
             ignoreIfMissing = true

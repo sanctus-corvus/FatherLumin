@@ -50,18 +50,7 @@ fun main() {
         }
     }
 
-    val geminiClient = GeminiClient(
-        GeminiClient.Configuration.create(
-            apiKey = BotConfig.geminiApiKey,
-            modelName = GeminiClient.GeminiModel.GEMINI_20FLASH_EXP,
-            safetySettingsBuilder = {
-                blockNone(SafetyCategory.HARM_CATEGORY_HATE_SPEECH)
-                blockNone(SafetyCategory.HARM_CATEGORY_HARASSMENT)
-                blockNone(SafetyCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT)
-                blockNone(SafetyCategory.HARM_CATEGORY_DANGEROUS_CONTENT)
-                blockNone(SafetyCategory.HARM_CATEGORY_CIVIC_INTEGRITY)
-            }
-        ))
+    val geminiClient = GeminiModelSwitcher
 
     val chatBot = GeminiBot(BotConfig, geminiClient, telegramStorage)
 
