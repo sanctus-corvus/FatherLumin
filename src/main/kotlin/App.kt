@@ -51,6 +51,29 @@ sealed class StorageValue {
     data class SessionValue(val zipData: ByteArray) : StorageValue()
 }
 
+
+@Serializable
+data class MessageDetails(
+    val messageId: Long,
+    val timestamp: String,
+    val sender: SenderInfo,
+    val text: String,
+    val reply: ReplyInfo? = null
+)
+
+@Serializable
+data class SenderInfo(
+    val id: Long,
+    val firstName: String,
+    val lastName: String
+)
+
+@Serializable
+data class ReplyInfo(
+    val messageId: Long
+)
+
+
 class GeminiBot(
     private val config: BotConfig,
     private val geminiModelSwitcher: GeminiModelSwitcher,
@@ -158,24 +181,48 @@ class GeminiBot(
         telegramStorage[StorageKey.Chat(chatId)] = StorageValue.ChatDataValue(chatData)
     }
 
-    private fun addMessageToHistory(chatId: Long, userName: String, text: String) {
-        val currentTimestamp = java.time.LocalDateTime.now().format(
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    private fun createHistoryEntry(message: Message): String {
+        if (message.senderId !is MessageSenderUser) return "{}"
+        val senderId = (message.senderId as MessageSenderUser).userId
+        val senderInfo = try {
+            val user = client?.send(GetUser().apply { userId = senderId })?.get(1, TimeUnit.SECONDS)
+            if (user is User) {
+                SenderInfo(user.id, user.firstName, user.lastName)
+            } else {
+                SenderInfo(senderId, "unknown", "unknown")
+            }
+        } catch (e: Exception) {
+            println("Ошибка GetUser: ${e.message}")
+            SenderInfo(senderId, "unknown", "unknown")
+        }
+        val currentTimestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+        val replyInfo = if (message.replyTo is MessageReplyToMessage) {
+            ReplyInfo((message.replyTo as MessageReplyToMessage).messageId)
+        } else null
+
+        val details = MessageDetails(
+            messageId = message.id,
+            timestamp = currentTimestamp, // можно также использовать message.date, если он в нужном формате
+            sender = senderInfo,
+            text = if (message.content is MessageText) (message.content as MessageText).text.text else "",
+            reply = replyInfo
         )
+        return Json.encodeToString(MessageDetails.serializer(), details)
+    }
+
+    private fun addMessageToHistory(chatId: Long, message: Message) {
+        val entryJson = createHistoryEntry(message)
         val chatData = loadChatData(chatId)
-        val newMessages = (chatData.messages + ChatMessage(userName, text, currentTimestamp)).takeLast(config.historySize)
+        val newMessages = (chatData.messages + ChatMessage("", entryJson, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))))
+            .takeLast(config.historySize)
         saveChatData(chatId, chatData.copy(messages = newMessages))
-        println("Добавлено сообщение для chatId $chatId от $userName: $text")
+        println("Добавлена запись в историю для chatId $chatId: $entryJson")
     }
 
     private fun buildGeminiPrompt(currentPrompt: String, chatId: Long, userName: String): String {
         val chatData = loadChatData(chatId)
 
-        val historyText = chatData.messages.joinToString(separator = "\n") { msg ->
-            // Если сообщение является reply, добавляем информацию о том, на какое сообщение отвечали
-            val replyInfo = if (msg.timestamp.contains("replied to")) "" else ""
-            "[${msg.timestamp}] @${msg.userName}$replyInfo: ${msg.text}"
-        }
+        val historyText = chatData.messages.joinToString(separator = "\n") { it.text }
         val lastMessages = chatData.messages.takeLast(10) // На случай ограничения
         
         val userId = 990823086L
@@ -297,14 +344,15 @@ class GeminiBot(
           ТЕКСТ ПИШИ БЕЗ БЕЗ ВСЯКИХ "role" "TEXT" "PARTS" { { } [] и всяких бесовских символов, ты выше мне правильно отправил сообщение, 
           перед этим, нужно только то, что внутри поля "text": "// ВОТ ЗДЕСЬ, ТОЛЬКО ЭТОТ ТЕКСТ И ВСЁ БОЛЬШЕ НИЧЕГО НЕ НАДО!
          
-        Если среди этих сообщений есть такой вопрос или тема(на которую ты еще не ответил), на которую стоит ответить, верни JSON в следующем формате:
-        {"messageId": <ID сообщения>, "text": "<сгенерированный ответ>"}
-        Если ничего интересного не найдено или ты не хочешь отвечать, верни:
-        {"messageId": null, "text": ""}
-        
-        НИКОГДА НЕ ПОВТОРЯЙСЯ, СМОТРИ ПО ИСТОРИИ ЧАТА, ЕСЛИ ТЫ УЖЕ ОТВЕТИЛ НА КАКОЕ ЛИБО СООБЩЕНИЕ, ТО НЕ НАДО ЭТО ДЕЛАТЬ
-        История чата:
-        $historyText
+            Если среди этих сообщений (каждое сообщение представлено в виде JSON с полями messageId, timestamp, sender, text и, если это ответ, reply) 
+            есть такой вопрос или тема (на которую ты ещё не ответил), на которую стоит ответить, верни JSON в следующем формате:
+            {"messageId": <ID сообщения>, "text": "<сгенерированный ответ>"}
+            Если ничего интересного не найдено или ты не хочешь отвечать, верни:
+            {"messageId": null, "text": ""}
+            
+            (НЕ ОТВЕЧАЙ НА СОБСТВЕННЫЙ СООБЩЕНИЯ ПОМЕЧЕННЫЕ КАК ЛЮМИН или У КОТОРЫХ ТВОЁ ID - 8137435162)
+            История чата:
+            $historyText
          
          
          
@@ -337,6 +385,15 @@ class GeminiBot(
             AnalysisResult()
         }
     }
+
+    private fun isAlreadyAnswered(chatId: Long, targetMessageId: Long): Boolean {
+        val chatData = loadChatData(chatId)
+        return chatData.messages.any { msg ->
+            msg.userName.contains(config.botName, ignoreCase = true) &&
+                    msg.text.contains("Ответ на $targetMessageId:")
+        }
+    }
+
     private fun getSenderName(message: Message): String {
         return if (message.senderId is MessageSenderUser) {
             val senderId = (message.senderId as MessageSenderUser).userId
@@ -492,15 +549,15 @@ class GeminiBot(
                 // Обрабатываем только разрешённые чаты
                 if (message.chatId !in config.allowedChatIds) return@launch
                 // Не обрабатываем сообщения, отправленные самим ботом
-                if (message.senderId is MessageSenderUser &&
-                    (message.senderId as MessageSenderUser).userId == botUserId) return@launch
+ /*               if (message.senderId is MessageSenderUser &&
+                    (message.senderId as MessageSenderUser).userId == botUserId) return@launch*/
                 // Фильтруем только текстовые сообщения
                 if (message.content !is MessageText) return@launch
 
                 val incomingText = (message.content as MessageText).text.text
 
                 simulateReading(incomingText)
-                addMessageToHistory(message.chatId, getSenderName(message), incomingText)
+                addMessageToHistory(message.chatId, message)
 
                 // Отмечаем сообщение как прочитанное
                 val viewMessagesRequest = ViewMessages().apply {
@@ -578,7 +635,7 @@ class GeminiBot(
     private fun startAutonomousResponder(targetChatId: Long) {
         CoroutineScope(Dispatchers.Default).launch {
             while (isActive) {
-                delay(TimeUnit.MINUTES.toMillis(6))
+                delay(TimeUnit.MINUTES.toMillis(4))
                 val prompt = buildGeminiPrompt("", targetChatId, "")
 
                 telegramRateLimiter.acquire()
@@ -621,6 +678,9 @@ class GeminiBot(
                     return@launch
                 }
                 if (analysisResult.messageId != null && analysisResult.text.isNotBlank()) {
+                    if (isAlreadyAnswered(targetChatId, analysisResult.messageId)) {
+                        return@launch
+                    }
                     messageQueueMutex.withLock {
                         println("Ответ на: ${analysisResult.messageId}.")
                         if (analysisResult.text.trim() == "/shoot") {
@@ -631,7 +691,7 @@ class GeminiBot(
                                 texts = "/shoot",
                                 useRateLimiter = false
                             )
-                            addMessageToHistory(targetChatId, config.botName, "/shoot")
+                            //addMessageToHistory(targetChatId, analysisResult)
                             return@launch
                         }
 
@@ -667,11 +727,6 @@ class GeminiBot(
                             )
                         }
 
-                        addMessageToHistory(
-                            targetChatId,
-                            config.botName,
-                            "Ответ на ${analysisResult.messageId}: ${analysisResult.text}"
-                        )
                         geminiModelSwitcher.incrementRequestCount()
                     }
                 } else {
@@ -770,7 +825,7 @@ class GeminiBot(
         }
     }
 
-    private suspend fun processIncomingMessage(clientMessage: Message, incomingText: String) {
+/*    private suspend fun processIncomingMessage(clientMessage: Message, incomingText: String) {
         val senderUserId = (clientMessage.senderId as MessageSenderUser).userId
         val senderName = try {
             val getUserReq = GetUser().apply { userId = senderUserId }
@@ -855,7 +910,7 @@ class GeminiBot(
         }
 
         addMessageToHistory(clientMessage.chatId, config.botName, botResponseText)
-    }
+    }*/
     private suspend fun <T> retryOperation(
         times: Int = 3,
         initialDelay: Long = 1000,
