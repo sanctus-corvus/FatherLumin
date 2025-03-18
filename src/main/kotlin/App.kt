@@ -637,7 +637,7 @@ class GeminiBot(
             while (isActive) {
                 delay(TimeUnit.MINUTES.toMillis(4))
                 val prompt = buildGeminiPrompt("", targetChatId, "")
-
+                println(prompt)
                 telegramRateLimiter.acquire()
                 var geminiResponse = try {
                     retryOperation { currentGeminiClient.generateContent(prompt) }
