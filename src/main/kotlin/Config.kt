@@ -48,7 +48,7 @@ object BotConfig {
     var botNamePrefix = botName.lowercase()
     const val historySize = 120
 
-    val defaultGeminiModel = GeminiClient.GeminiModel.GEMINI_20FLASH_EXP
+    val defaultGeminiModel = GeminiClient.GeminiModel.GEMINI_20FLASH_PRO
     val fallbackGeminiModel = GeminiClient.GeminiModel.GEMINI_20FLASH_EXP
     fun bootstrapConfig(telegramStorage: TelegramStorage<StorageKey, StorageValue>) {
         val localEnv = dotenv {

@@ -389,8 +389,12 @@ class GeminiBot(
     private fun isAlreadyAnswered(chatId: Long, targetMessageId: Long): Boolean {
         val chatData = loadChatData(chatId)
         return chatData.messages.any { msg ->
-            msg.userName.contains(config.botName, ignoreCase = true) &&
-                    msg.text.contains("Ответ на $targetMessageId:")
+            try {
+                val details = Json.decodeFromString(MessageDetails.serializer(), msg.text)
+                details.reply?.messageId == targetMessageId && details.sender.id == botUserId
+            } catch (e: Exception) {
+                false
+            }
         }
     }
 
@@ -637,7 +641,7 @@ class GeminiBot(
             while (isActive) {
                 delay(TimeUnit.MINUTES.toMillis(4))
                 val prompt = buildGeminiPrompt("", targetChatId, "")
-                println(prompt)
+               // println("Автономный prompt:\n$prompt")
                 telegramRateLimiter.acquire()
                 var geminiResponse = try {
                     retryOperation { currentGeminiClient.generateContent(prompt) }
@@ -645,7 +649,6 @@ class GeminiBot(
                     println("Ошибка запроса Gemini: ${e.message}")
                     continue
                 }
-
                 var attempt = 0
                 while (geminiResponse.statusCode !in 200..299 && attempt < 3) {
                     println("Ошибка Gemini API: ${geminiResponse.statusCode}, повтор запроса...")
@@ -653,36 +656,38 @@ class GeminiBot(
                         retryOperation { currentGeminiClient.generateContent(prompt) }
                     } catch (e: Exception) {
                         println("Ошибка Gemini при повторном запросе: ${e.message}")
-                        return@launch
+                        break
                     }
                     attempt++
                 }
-
                 if (geminiResponse.statusCode !in 200..299) {
                     println("Не удалось получить корректный ответ")
-                    return@launch
+                    continue
                 }
-
-                val rawResponse = geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() ?: "No response body"
-                var jsonResponse = rawResponse
+                var rawResponse = geminiResponse.body?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() ?: ""
                 if (rawResponse.startsWith("```json") && rawResponse.endsWith("```")) {
-                    jsonResponse = rawResponse.substringAfter("```json").substringBeforeLast("```").trim()
+                    rawResponse = rawResponse.substringAfter("```json").substringBeforeLast("```").trim()
                 } else if (rawResponse.startsWith("```") && rawResponse.endsWith("```")) {
-                    jsonResponse = rawResponse.substringAfter("```").substringBeforeLast("```").trim()
+                    rawResponse = rawResponse.substringAfter("```").substringBeforeLast("```").trim()
                 }
-
-
-                val analysisResult = parseAnalysisResult(jsonResponse)
+                println("JSON-ответ от Gemini: $rawResponse")
+                val analysisResult = try {
+                    Json.decodeFromString(AnalysisResult.serializer(), rawResponse)
+                } catch (e: Exception) {
+                    println("Ошибка парсинга ответа: ${e.message}")
+                    AnalysisResult()
+                }
                 if (!checkActive()) {
                     println("Активное время закончилось – отправка ответа отменена")
-                    return@launch
+                    continue
                 }
                 if (analysisResult.messageId != null && analysisResult.text.isNotBlank()) {
                     if (isAlreadyAnswered(targetChatId, analysisResult.messageId)) {
-                        return@launch
+                        println("На сообщение ${analysisResult.messageId} уже дан ответ, пропускаем.")
+                        continue
                     }
                     messageQueueMutex.withLock {
-                        println("Ответ на: ${analysisResult.messageId}.")
+                        println("Люмин решил ответить на сообщение ${analysisResult.messageId}.")
                         if (analysisResult.text.trim() == "/shoot") {
                             sendResponseMessage(
                                 chatId = targetChatId,
@@ -691,10 +696,8 @@ class GeminiBot(
                                 texts = "/shoot",
                                 useRateLimiter = false
                             )
-                            //addMessageToHistory(targetChatId, analysisResult)
-                            return@launch
+                            return@withLock
                         }
-
                         simulateTyping(
                             targetChatId,
                             messageThreadId = null,
@@ -726,8 +729,6 @@ class GeminiBot(
                                 useRateLimiter = true
                             )
                         }
-
-                        geminiModelSwitcher.incrementRequestCount()
                     }
                 } else {
                     println("Люмин не обнаружил темы для ответа.")
