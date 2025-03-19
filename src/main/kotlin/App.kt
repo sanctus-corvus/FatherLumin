@@ -670,6 +670,7 @@ class GeminiBot(
                 } else if (rawResponse.startsWith("```") && rawResponse.endsWith("```")) {
                     rawResponse = rawResponse.substringAfter("```").substringBeforeLast("```").trim()
                 }
+                geminiModelSwitcher.incrementRequestCount()
                 println("JSON-ответ от Gemini: $rawResponse")
                 val analysisResult = try {
                     Json.decodeFromString(AnalysisResult.serializer(), rawResponse)
@@ -729,7 +730,7 @@ class GeminiBot(
                                 useRateLimiter = true
                             )
                         }
-                        geminiModelSwitcher.incrementRequestCount()
+                        //geminiModelSwitcher.incrementRequestCount()
                     }
                 } else {
                     println("Люмин не обнаружил темы для ответа.")
