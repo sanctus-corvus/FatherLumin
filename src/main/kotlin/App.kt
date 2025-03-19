@@ -1,5 +1,4 @@
 import com.github.demidko.telegram.TelegramStorage
-import com.github.sanctuscorvus.GeminiClient
 import com.google.common.util.concurrent.RateLimiter
 import it.tdlight.client.*
 import it.tdlight.jni.TdApi.*
@@ -729,6 +728,7 @@ class GeminiBot(
                                 useRateLimiter = true
                             )
                         }
+                        geminiModelSwitcher.incrementRequestCount()
                     }
                 } else {
                     println("Люмин не обнаружил темы для ответа.")
